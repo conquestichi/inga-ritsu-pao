@@ -6,6 +6,7 @@ dist/
 build/
 .env
 .pytest_cache/
+.coverage
 .ruff_cache/
 *.log
 output/

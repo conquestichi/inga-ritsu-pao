@@ -58,6 +58,21 @@ python3 -m ritsu_pao.publish.publisher \
     --output "$PUBLISH_OUTPUT" \
     --config "$PROJECT_DIR/config"
 
+# ── 動画生成 (VOICEVOX + ffmpeg) ──
+META_STATUS=$(python3 -c "import json; print(json.load(open('$PUBLISH_OUTPUT/meta.json'))['status'])" 2>/dev/null || echo "no_post")
+if [[ "$META_STATUS" == "ok" ]]; then
+    echo "[ritsu-pao] Starting video pipeline..."
+    python3 -m ritsu_pao.video.pipeline \
+        --script "$PUBLISH_OUTPUT/script_youtube.json" \
+        --output "$PUBLISH_OUTPUT/final.mp4" \
+        --assets /srv/inga/assets \
+        --config "$PROJECT_DIR/config/video_config.json" \
+    && echo "[ritsu-pao] Video generated: $PUBLISH_OUTPUT/final.mp4" \
+    || echo "[ritsu-pao] WARN: Video generation failed (non-fatal)"
+else
+    echo "[ritsu-pao] Skipping video (status=$META_STATUS)"
+fi
+
 # ── Slack通知 ──
 echo "[ritsu-pao] Sending Slack notifications..."
 python3 -m ritsu_pao.notify.cli \
