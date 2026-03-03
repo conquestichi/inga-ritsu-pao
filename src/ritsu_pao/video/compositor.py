@@ -18,8 +18,8 @@ SHORTS_WIDTH = 1080
 SHORTS_HEIGHT = 1920
 BG_COLOR = "#1a1a2e"
 FONT_COLOR = "white"
-TELOP_FONT_SIZE = 40
-TELOP_Y_START = 100
+TELOP_FONT_SIZE = 52
+TELOP_Y_START = 80
 
 
 def _check_ffmpeg() -> bool:
@@ -112,11 +112,11 @@ def compose_shorts(
         char_idx = input_idx
         input_idx += 1
         if str(character_clip).endswith(".webm"):
-            filter_parts.append(f"[{char_idx}:v]scale=-1:{int(height*0.5)}[char]")
+            filter_parts.append(f"[{char_idx}:v]scale=-1:{int(height*0.75)}[char]")
         else:
             filter_parts.append(
-                f"[{char_idx}:v]chromakey=0x00FF00:0.15:0.1,"
-                f"scale=-1:{int(height*0.5)}[char]"
+                f"[{char_idx}:v]chromakey=0x00FF00:0.12:0.08,"
+                f"scale=-1:{int(height*0.75)}[char]"
             )
         filter_parts.append(
             f"[{current_layer}][char]overlay=(W-w)/2:H-h:shortest=1[with_char]"
@@ -135,7 +135,7 @@ def compose_shorts(
         "-filter_complex", filter_complex,
         "-map", f"[{current_layer}]", "-map", f"{audio_idx}:a",
         "-t", str(duration),
-        "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+        "-c:v", "libx264", "-preset", "fast", "-crf", "18",
         "-c:a", "aac", "-b:a", "128k",
         "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-r", "30",
         str(output_path),
