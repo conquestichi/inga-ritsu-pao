@@ -1,0 +1,30 @@
+{
+  "templates": {
+    "daily_signal": {
+      "body": [
+        "📊 因果律シグナル {date}\n\n{regime_label}\n\n▶ {ticker_display} {name}（{sector}）\nスコア: {score}\n\n{reason_summary}\n\n#因果律 #日本株 #クオンツ",
+        "🔍 {date} の因果律シグナル\n\nレジーム: {regime_label}\n\n注目: {ticker_display} {name}\nスコア: {score}\n\n{reason_summary}\n\n#因果律 #日本株",
+        "📈 因果律 {date}\n\n{regime_label}\n{ticker_display} {name}（{sector}）\nスコア: {score}\n\n{reason_summary}\n\n#因果律 #クオンツ #AI投資"
+      ],
+      "self_reply": [
+        "⚠️ 免責: これはクオンツシグナルの共有であり、投資助言ではありません。投資判断はご自身の責任でお願いします。\n\n僕の見立ての条件が崩れたら撤退です。\n保有想定: {holding_window}",
+        "📝 補足\n・保有想定: {holding_window}\n・リスクフラグ: {risk_flags}\n\nあくまでシグナルであって助言ではありません。条件変化時は撤退を検討してください。"
+      ]
+    },
+    "no_trade": {
+      "body": [
+        "📊 因果律シグナル {date}\n\n本日はシグナル品質基準を満たさなかったため、推奨銘柄はありません。\n\n停止理由: {rejection_reasons}\n\n無理にトレードしないことも大切です。\n\n#因果律 #日本株",
+        "🔍 {date} の因果律\n\n品質ゲートNG — 本日のシグナルは見送りです。\n理由: {rejection_reasons}\n\n「やらない判断」も因果律の一部です。\n\n#因果律 #クオンツ"
+      ]
+    }
+  },
+  "regime_labels": {
+    "risk_on": "🟢 レジーム: リスクオン",
+    "risk_off": "🔴 レジーム: リスクオフ"
+  },
+  "regime_short": {
+    "risk_on": "リスクオン",
+    "risk_off": "リスクオフ"
+  },
+  "template_selection": "random"
+}
