@@ -19,7 +19,7 @@ DEFAULT_VIDEO_CONFIG = {
     "height": 1920,
     "bg_color": "#1a1a2e",
     "voicevox_url": "http://127.0.0.1:50021",
-    "voicevox_speaker_id": 2,
+    "voicevox_speaker_id": 0,
 }
 
 

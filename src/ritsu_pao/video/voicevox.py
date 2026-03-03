@@ -14,7 +14,7 @@ import httpx
 logger = logging.getLogger(__name__)
 
 DEFAULT_BASE_URL = "http://127.0.0.1:50021"
-DEFAULT_SPEAKER_ID = 2  # 四国めたん(ノーマル) — 落ち着いたトーン
+DEFAULT_SPEAKER_ID = 0  # 四国めたん(あまあま) — 律のデフォルト
 
 
 class VoicevoxClient:
