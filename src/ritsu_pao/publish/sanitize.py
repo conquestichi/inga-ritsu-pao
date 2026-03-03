@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ritsu_pao.schemas import Candidate, CandidatesJson, GatesResult
+from ritsu_pao.schemas import Candidate, CandidatesJson
 
 
 def ticker_display(ticker: str) -> str:

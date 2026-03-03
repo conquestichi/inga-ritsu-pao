@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
-import pytest
 
 from ritsu_pao.schemas import CandidatesJson, GatesResult
 from ritsu_pao.publish.sanitize import (
