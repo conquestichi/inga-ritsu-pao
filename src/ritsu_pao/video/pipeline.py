@@ -9,7 +9,11 @@ import sys
 from pathlib import Path
 
 from ritsu_pao.video.voicevox import generate_audio_from_script
-from ritsu_pao.video.compositor import build_telop_lines_from_script, compose_shorts
+from ritsu_pao.video.compositor import (
+    build_telop_lines_from_script,
+    compose_shorts,
+    compose_shorts_template,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -49,14 +53,11 @@ def run_video_pipeline(
     audio_files = generate_audio_from_script(
         script, work_dir / "audio",
         base_url=cfg.get("voicevox_url", "http://127.0.0.1:50021"),
-        speaker_id=cfg.get("voicevox_speaker_id", 2),
+        speaker_id=cfg.get("voicevox_speaker_id", 0),
     )
     audio_path = audio_files.get("full")
     if not audio_path or not audio_path.exists():
         raise RuntimeError("Audio generation failed")
-
-    # Telop
-    telop_lines = build_telop_lines_from_script(script)
 
     # Assets lookup
     character_clip = None
@@ -64,13 +65,6 @@ def run_video_pipeline(
         c = assets / f"ritsu_loop{ext}"
         if c.exists():
             character_clip = c
-            break
-
-    background_image = None
-    for ext in [".png", ".jpg"]:
-        c = assets / f"background{ext}"
-        if c.exists():
-            background_image = c
             break
 
     font_path = None
@@ -83,16 +77,48 @@ def run_video_pipeline(
             font_path = str(fp)
             break
 
-    # Compose
-    result = compose_shorts(
-        audio_path=audio_path,
-        output_path=output_path,
-        telop_lines=telop_lines,
-        character_clip=character_clip,
-        background_image=background_image,
-        font_path=font_path,
-        video_config=cfg,
-    )
+    bgm_path = None
+    for ext in [".mp3", ".wav", ".m4a"]:
+        c = assets / f"bgm_loop{ext}"
+        if c.exists():
+            bgm_path = c
+            break
+
+    # テンプレモード or フォールバック
+    status = script.get("status", "trade")
+    template_key = "template_trade.mp4" if status == "trade" else "template_no_trade.mp4"
+    template_path = assets / template_key
+
+    if template_path.exists():
+        logger.info("Template mode: %s", template_path)
+        result = compose_shorts_template(
+            template_path=template_path,
+            audio_path=audio_path,
+            output_path=output_path,
+            script=script,
+            character_clip=character_clip,
+            bgm_path=bgm_path,
+            font_path=font_path,
+        )
+    else:
+        logger.info("Fallback mode (no template found)")
+        background_image = None
+        for ext in [".png", ".jpg"]:
+            c = assets / f"background{ext}"
+            if c.exists():
+                background_image = c
+                break
+
+        telop_lines = build_telop_lines_from_script(script)
+        result = compose_shorts(
+            audio_path=audio_path,
+            output_path=output_path,
+            telop_lines=telop_lines,
+            character_clip=character_clip,
+            background_image=background_image,
+            font_path=font_path,
+            video_config=cfg,
+        )
     logger.info("Video pipeline complete: %s", result)
     return result
 
