@@ -259,7 +259,7 @@ def compose_shorts_template(
 
 SUBTITLE_Y = 420  # 字幕Y位置 (中央やや上)
 SUBTITLE_FONT_SIZE = 56
-SUBTITLE_BAND_HEIGHT = 144
+SUBTITLE_BAND_HEIGHT = 220
 SUBTITLE_MAX_CHARS = 20  # 1行最大文字数
 
 # ─── 下腹部リロール (常時表示) ───
@@ -443,9 +443,9 @@ def _build_scene_text(
         sub_text = tc.get("sub_text", "")
         tc_font_size = tc.get("font_size", 122)
         tc_sub_font_size = tc.get("sub_font_size", 62)
-        filters.append(_dt(text, "(w-text_w)/2", 800, tc_font_size, "white"))
+        filters.append(_dt(text, "(w-text_w)/2", 740, tc_font_size, "white"))
         if sub_text:
-            filters.append(_dt(sub_text, "(w-text_w)/2", 900, tc_sub_font_size, "#aaaaaa"))
+            filters.append(_dt(sub_text, "(w-text_w)/2", 920, tc_sub_font_size, "#aaaaaa"))
 
     elif scene_key == "intro":
         as_of = script.get("as_of", "")
