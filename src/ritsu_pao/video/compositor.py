@@ -258,9 +258,9 @@ def compose_shorts_template(
 # ─── スクロール字幕 (台詞) ───
 
 SUBTITLE_Y = 420  # 字幕Y位置 (中央やや上)
-SUBTITLE_FONT_SIZE = 56
-SUBTITLE_BAND_HEIGHT = 80
-SUBTITLE_SPEED = 300  # px/sec
+SUBTITLE_FONT_SIZE = 84
+SUBTITLE_BAND_HEIGHT = 110
+SUBTITLE_SPEED = 280  # px/sec
 
 # ─── 下腹部リロール (常時表示) ───
 
