@@ -3,7 +3,7 @@
     "A_number_hook": {
       "label": "数字フック＋二択",
       "regime": "risk_on",
-      "body": "📊 因果律（{date}）\n60日分の分足データで学習 → {universe_size}銘柄から選出\n\n律の注目 → {name}（{ticker_display}）\nスコア：{score} / 100\n{ic_display}\n\n根拠（因果quantsが検出）\n・{reason_1}\n・{reason_2}\n・{reason_3}\n\n律の見立てが崩れる条件：{condition_b}\n→ あなたはどう見る？理由も聞かせて\n\n品質ゲート：{gate_status}",
+      "body": "📊 因果律（{date}）\n学習AI 因果quantsが{universe_size}銘柄から選出\n\n律の注目 → {name}（{ticker_display}）\nスコア：{score} / 100\n{ic_display}\n\n根拠（因果quantsが検出）\n・{reason_1}\n・{reason_2}\n・{reason_3}\n\n律の見立てが崩れる条件：{condition_b}\n→ あなたはどう見る？理由も聞かせて\n\n品質ゲート：{gate_status}",
       "self_reply": "律の撤退ライン：{condition_b}なら手を出しません。保有想定{holding_window}。\n詳しい根拠と監査ログはプロフィール固定から。"
     },
     "D_warning": {
@@ -15,7 +15,7 @@
     "F_provoke": {
       "label": "反証条件型",
       "regime": "risk_on",
-      "body": "🤖 因果律（{date}）\n60日分の分足データで学習 → {name}（{ticker_display}）スコア{score}\n\n因果quantsはこう読んでます。\nでも律が考える外れ条件 → {condition_b}\n\nあなたならどこで撤退しますか？\n条件を1つ教えてください。\n\n品質ゲート：{gate_status}｜{ic_display}",
+      "body": "🤖 因果律（{date}）\n学習AI 因果quantsが{universe_size}銘柄から選出 → {name}（{ticker_display}）スコア{score}\n\n因果quantsはこう読んでます。\nでも律が考える外れ条件 → {condition_b}\n\nあなたならどこで撤退しますか？\n条件を1つ教えてください。\n\n品質ゲート：{gate_status}｜{ic_display}",
       "self_reply": "律が見ている根拠（{universe_size}銘柄から検出）\n・{reason_1}\n・{reason_2}\n・{reason_3}\n保有想定{holding_window}。条件が崩れたら素直に撤退です。"
     }
   },
