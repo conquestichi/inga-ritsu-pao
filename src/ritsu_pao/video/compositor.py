@@ -356,12 +356,18 @@ def _build_scroll_subtitle(
 def _build_bottom_ticker(
     font_path: str | None,
     total_duration: float,
+    reveal_start: float | None = None,
 ) -> list[str]:
-    """画面下部の右スクロールリロール (常時表示)"""
+    """画面下部の右スクロールリロール (常時表示、revealシーンでは非表示)"""
     h = SHORTS_HEIGHT
     y = h - TICKER_Y_OFFSET
     escaped = _escape_drawtext(TICKER_TEXT * 3)  # 3回繰り返してループ感
     font_opt = f":fontfile={font_path}" if font_path else ""
+
+    # revealシーン中は非表示
+    enable_str = ""
+    if reveal_start is not None:
+        enable_str = f":enable='lt(t\\,{reveal_start:.2f})'"
 
     filters = []
     # 半透明帯
@@ -369,6 +375,7 @@ def _build_bottom_ticker(
         f"drawbox=x=0:y={y - 8}"
         f":w=iw:h={TICKER_BAND_HEIGHT}"
         f":color=black@0.4:t=fill"
+        f"{enable_str}"
     )
     filters.append(band)
 
@@ -380,6 +387,7 @@ def _build_bottom_ticker(
         f":y={y}"
         f":borderw=1:bordercolor=black@0.6"
         f"{font_opt}"
+        f"{enable_str}"
     )
     filters.append(scroll)
 
@@ -640,7 +648,13 @@ def compose_shorts_scenes(
         bgm_idx = input_idx
         input_idx += 1
 
-    # キャラクターオーバーレイ
+    # キャラクターオーバーレイ (revealシーンでは非表示)
+    reveal_start = None
+    for sk, ss, se in scenes:
+        if sk == "reveal":
+            reveal_start = ss
+            break
+
     if character_clip and character_clip.exists():
         inputs.extend(["-stream_loop", "-1", "-i", str(character_clip)])
         char_idx = input_idx
@@ -652,10 +666,30 @@ def compose_shorts_scenes(
                 f"[{char_idx}:v]chromakey=0x00FF00:0.12:0.08,"
                 f"scale=-1:{int(h * 0.75)}[char]"
             )
-        filter_parts.append(
-            f"[{current_layer}][char]overlay=(W-w)/2:H-h:shortest=1[with_char]"
-        )
+        if reveal_start is not None:
+            # revealシーンではキャラ非表示
+            char_enable = f"lt(t\\,{reveal_start:.2f})"
+            filter_parts.append(
+                f"[{current_layer}][char]overlay=(W-w)/2:H-h"
+                f":shortest=1:enable='{char_enable}'[with_char]"
+            )
+        else:
+            filter_parts.append(
+                f"[{current_layer}][char]overlay=(W-w)/2:H-h:shortest=1[with_char]"
+            )
         current_layer = "with_char"
+
+    # revealシーン: 黒バックオーバーレイ (確実に黒背景にする)
+    if reveal_start is not None:
+        reveal_end = scenes[-1][2] if scenes[-1][0] == "reveal" else total_duration
+        reveal_enable = f"between(t\\,{reveal_start:.2f}\\,{reveal_end:.2f})"
+        black_overlay = (
+            f"drawbox=x=0:y=0:w=iw:h=ih"
+            f":color=black:t=fill"
+            f":enable='{reveal_enable}'"
+        )
+        filter_parts.append(f"[{current_layer}]{black_overlay}[with_reveal_bg]")
+        current_layer = "with_reveal_bg"
 
     # シーンごとのテキスト注入 (enable付き)
     all_text_filters: list[str] = []
@@ -669,15 +703,15 @@ def compose_shorts_scenes(
         filter_parts.append(f"[{current_layer}]{text_chain}[with_text]")
         current_layer = "with_text"
 
-    # スクロール字幕
+    # スクロール字幕 (revealシーンでは非表示)
     sub_filters = _build_scroll_subtitle(scenes, script, font_path)
     if sub_filters:
         sub_chain = ",".join(sub_filters)
         filter_parts.append(f"[{current_layer}]{sub_chain}[with_scroll]")
         current_layer = "with_scroll"
 
-    # 下腹部リロール (右スクロール、常時表示)
-    ticker_filters = _build_bottom_ticker(font_path, total_duration)
+    # 下腹部リロール (revealシーンでは非表示)
+    ticker_filters = _build_bottom_ticker(font_path, total_duration, reveal_start)
     if ticker_filters:
         ticker_chain = ",".join(ticker_filters)
         filter_parts.append(f"[{current_layer}]{ticker_chain}[with_ticker]")
