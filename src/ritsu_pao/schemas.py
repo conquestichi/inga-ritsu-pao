@@ -92,6 +92,14 @@ class ScriptYoutubeJson(BaseModel):
     voicepeak: dict[str, Any] = Field(default_factory=dict)
     upload_meta: dict[str, Any] = Field(default_factory=dict)
     v2_experiment: dict[str, Any] | None = None
+    # compositor用ビジュアルデータ
+    name: str = ""
+    ticker_display: str = ""
+    score: float | None = None
+    regime: str = ""
+    as_of: str = ""
+    reasons_display: list[str] = Field(default_factory=list)
+    holding_window: str = ""
 
 
 # ─── 出力: meta.json ───

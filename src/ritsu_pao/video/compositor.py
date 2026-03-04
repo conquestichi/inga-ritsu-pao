@@ -337,17 +337,21 @@ def _build_bottom_ticker(
     font_path: str | None,
     total_duration: float,
     reveal_start: float | None = None,
+    tc_dur: float = 0.0,
 ) -> list[str]:
-    """画面下部の右スクロールリロール (常時表示、revealシーンでは非表示)"""
+    """画面下部の右スクロールリロール (title_card/reveal以外で表示)"""
     h = SHORTS_HEIGHT
     y = h - TICKER_Y_OFFSET
     escaped = _escape_drawtext(TICKER_TEXT * 3)  # 3回繰り返してループ感
     font_opt = f":fontfile={font_path}" if font_path else ""
 
-    # revealシーン中は非表示
-    enable_str = ""
+    # title_cardとreveal中は非表示
     if reveal_start is not None:
-        enable_str = f":enable='lt(t\\,{reveal_start:.2f})'"
+        enable_str = f":enable='between(t\\,{tc_dur:.2f}\\,{reveal_start:.2f})'"
+    elif tc_dur > 0:
+        enable_str = f":enable='gte(t\\,{tc_dur:.2f})'"
+    else:
+        enable_str = ""
 
     filters = []
     # 半透明帯
@@ -603,7 +607,7 @@ def compose_shorts_scenes(
         bgm_idx = input_idx
         input_idx += 1
 
-    # ── 5. キャラクターオーバーレイ (reveal以外) ──
+    # ── 5. キャラクターオーバーレイ (title_cardとreveal以外のみ表示) ──
     reveal_start = None
     for sk, ss, _se in scenes:
         if sk == "reveal":
@@ -623,17 +627,15 @@ def compose_shorts_scenes(
                 f"[{char_idx}:v]chromakey=0x00FF00:0.12:0.08,"
                 f"scale=-1:{int(h * 0.75)}[char]"
             )
+        # title_card(0〜tc_dur)とreveal以降はキャラ非表示
         if reveal_start is not None:
-            enable = f"lt(t\\,{reveal_start:.2f})"
-            filter_parts.append(
-                f"[{current_layer}][char]overlay=(W-w)/2:H-h"
-                f":shortest=1:enable='{enable}'[with_char]"
-            )
+            enable = f"between(t\\,{tc_dur:.2f}\\,{reveal_start:.2f})"
         else:
-            filter_parts.append(
-                f"[{current_layer}][char]overlay=(W-w)/2:H-h"
-                f":shortest=1[with_char]"
-            )
+            enable = f"gte(t\\,{tc_dur:.2f})"
+        filter_parts.append(
+            f"[{current_layer}][char]overlay=(W-w)/2:H-h"
+            f":shortest=1:enable='{enable}'[with_char]"
+        )
         current_layer = "with_char"
 
     # ── 6. シーンごとのテキスト注入 ──
@@ -655,8 +657,8 @@ def compose_shorts_scenes(
         filter_parts.append(f"[{current_layer}]{sub_chain}[with_scroll]")
         current_layer = "with_scroll"
 
-    # ── 8. 下腹部リロール (reveal以外) ──
-    ticker_filters = _build_bottom_ticker(font_path, total_duration, reveal_start)
+    # ── 8. 下腹部リロール (title_card/reveal以外) ──
+    ticker_filters = _build_bottom_ticker(font_path, total_duration, reveal_start, tc_dur)
     if ticker_filters:
         ticker_chain = ",".join(ticker_filters)
         filter_parts.append(f"[{current_layer}]{ticker_chain}[with_ticker]")
@@ -668,8 +670,16 @@ def compose_shorts_scenes(
 
     # ── 10. 音声ミックス ──
     if bgm_idx is not None:
+        # BGMをtitle_card分遅延 + reveal以降でフェードアウト
+        bgm_filters = f"[{bgm_idx}:a]volume=0.12"
+        if tc_dur > 0:
+            bgm_filters += f",adelay={int(tc_dur * 1000)}|{int(tc_dur * 1000)}"
+        if reveal_start is not None:
+            # reveal開始で急速フェードアウト (0.3秒)
+            bgm_filters += f",afade=t=out:st={reveal_start:.2f}:d=0.3"
+        bgm_filters += "[bgm_low]"
         filter_parts.append(
-            f"[{bgm_idx}:a]volume=0.12[bgm_low];"
+            f"{bgm_filters};"
             f"[{voice_label}][bgm_low]amix=inputs=2:duration=first[audio_out]"
         )
         audio_map = "[audio_out]"

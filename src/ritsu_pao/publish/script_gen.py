@@ -309,6 +309,23 @@ def generate_script_youtube(
         status = "no_trade"
         upload_meta = {}
 
+    # compositor用ビジュアルデータ
+    visual_name = ""
+    visual_ticker = ""
+    visual_score = None
+    visual_regime = gates.regime or ""
+    visual_reasons: list[str] = []
+    visual_holding = ""
+    if top1:
+        visual_name = top1.name or ""
+        visual_ticker = ctx.get("ticker_display", "")
+        visual_score = top1.score
+        visual_holding = top1.holding_window or ""
+        for r in top1.reasons_top3[:3]:
+            visual_reasons.append(
+                _simplify_reason(r.note, r.feature, r.direction)
+            )
+
     return ScriptYoutubeJson(
         date=as_of,
         status=status,
@@ -318,6 +335,13 @@ def generate_script_youtube(
         title_card=title_card,
         voicepeak=tmpl.get("voicepeak", {}),
         upload_meta=upload_meta,
+        name=visual_name,
+        ticker_display=visual_ticker,
+        score=visual_score,
+        regime=visual_regime,
+        as_of=as_of,
+        reasons_display=visual_reasons,
+        holding_window=visual_holding,
     )
 
 
