@@ -25,18 +25,18 @@ FONT_COLOR = "white"
 
 # テンプレモード: テキスト注入座標
 TEXT_LAYOUT = {
-    "date":    {"x": "(w-text_w)/2", "y": 140, "size": 44, "color": "white"},
-    "regime":  {"x": "(w-text_w)/2", "y": 220, "size": 40, "color": "#00ff88"},
-    "ticker":  {"x": 80, "y": 330, "size": 64, "color": "white"},
-    "score":   {"x": 80, "y": 420, "size": 48, "color": "#ffd700"},
-    "reason1": {"x": 80, "y": 480, "size": 36, "color": "#cccccc"},
-    "reason2": {"x": 80, "y": 520, "size": 36, "color": "#cccccc"},
-    "reason3": {"x": 80, "y": 560, "size": 36, "color": "#cccccc"},
-    "holding": {"x": 80, "y": 620, "size": 36, "color": "#88aaff"},
+    "date":    {"x": "(w-text_w)/2", "y": 140, "size": 58, "color": "white"},
+    "regime":  {"x": "(w-text_w)/2", "y": 220, "size": 52, "color": "#00ff88"},
+    "ticker":  {"x": 80, "y": 330, "size": 84, "color": "white"},
+    "score":   {"x": 80, "y": 420, "size": 62, "color": "#ffd700"},
+    "reason1": {"x": 80, "y": 480, "size": 48, "color": "#cccccc"},
+    "reason2": {"x": 80, "y": 520, "size": 48, "color": "#cccccc"},
+    "reason3": {"x": 80, "y": 560, "size": 48, "color": "#cccccc"},
+    "holding": {"x": 80, "y": 620, "size": 48, "color": "#88aaff"},
 }
 
 # フォールバックモード: テロップ設定
-TELOP_FONT_SIZE = 52
+TELOP_FONT_SIZE = 68
 TELOP_Y_START = 80
 
 
@@ -258,17 +258,17 @@ def compose_shorts_template(
 # ─── スクロール字幕 (台詞) ───
 
 SCROLL_Y = 420  # 字幕Y位置 (中央やや上)
-SCROLL_FONT_SIZE = 64
-SCROLL_SPEED = 200  # px/sec
-SCROLL_BAND_HEIGHT = 90
+SCROLL_FONT_SIZE = 84
+SCROLL_SPEED = 260  # px/sec (×1.3)
+SCROLL_BAND_HEIGHT = 110
 
 # ─── 下腹部リロール (常時表示) ───
 
 TICKER_TEXT = "AI  quants  因果律  学習システム  24時間稼働中  短期日本株  未来予測中  "
 TICKER_Y_OFFSET = 160  # 画面下端からのオフセット
-TICKER_FONT_SIZE = 30
-TICKER_SPEED = 100  # px/sec (ゆっくり右→左と逆方向)
-TICKER_BAND_HEIGHT = 48
+TICKER_FONT_SIZE = 40
+TICKER_SPEED = 130  # px/sec (×1.3)
+TICKER_BAND_HEIGHT = 60
 
 
 def _scene_to_spoken_text(scene_key: str, script: dict) -> str:
@@ -412,8 +412,8 @@ def _build_scene_text(
         tc = script.get("title_card", {})
         text = tc.get("text", "明日上がる日本株")
         sub_text = tc.get("sub_text", "")
-        tc_font_size = tc.get("font_size", 72)
-        tc_sub_font_size = tc.get("sub_font_size", 36)
+        tc_font_size = tc.get("font_size", 94)
+        tc_sub_font_size = tc.get("sub_font_size", 48)
         filters.append(_dt(text, "(w-text_w)/2", 800, tc_font_size, "white"))
         if sub_text:
             filters.append(_dt(sub_text, "(w-text_w)/2", 900, tc_sub_font_size, "#aaaaaa"))
@@ -421,40 +421,40 @@ def _build_scene_text(
     elif scene_key == "intro":
         as_of = script.get("as_of", "")
         if as_of:
-            filters.append(_dt(as_of, "(w-text_w)/2", 140, 52, "white"))
-        filters.append(_dt("因果律", "(w-text_w)/2", 220, 72, "#00eeff"))
+            filters.append(_dt(as_of, "(w-text_w)/2", 140, 68, "white"))
+        filters.append(_dt("因果律", "(w-text_w)/2", 220, 94, "#00eeff"))
         regime = script.get("regime", "")
         if regime:
             color = "#00ff88" if regime == "risk_on" else "#ff4444"
             label = "RISK ON" if regime == "risk_on" else "RISK OFF"
-            filters.append(_dt(label, "(w-text_w)/2", 320, 48, color))
+            filters.append(_dt(label, "(w-text_w)/2", 340, 62, color))
 
     elif scene_key == "ticker":
         ticker = script.get("ticker_display", "")
         name = script.get("name", "")
         if ticker or name:
-            filters.append(_dt(f"{ticker}  {name}", "(w-text_w)/2", 160, 68, "white"))
+            filters.append(_dt(f"{ticker}  {name}", "(w-text_w)/2", 160, 88, "white"))
         score = script.get("score")
         if score is not None:
-            filters.append(_dt(f"Score: {score}", "(w-text_w)/2", 260, 52, "#ffd700"))
+            filters.append(_dt(f"Score: {score}", "(w-text_w)/2", 270, 68, "#ffd700"))
 
     elif scene_key == "reason":
         reasons = script.get("reasons_display", [])
         for i, reason in enumerate(reasons[:3]):
             text = reason[:40] + "..." if len(reason) > 40 else reason
-            filters.append(_dt(text, "(w-text_w)/2", 160 + i * 70, 40, "#cccccc"))
+            filters.append(_dt(text, "(w-text_w)/2", 160 + i * 80, 52, "#cccccc"))
         holding = script.get("holding_window", "")
         if holding:
-            filters.append(_dt(f"想定保有: {holding}", "(w-text_w)/2", 400, 40, "#88aaff"))
+            filters.append(_dt(f"想定保有: {holding}", "(w-text_w)/2", 420, 52, "#88aaff"))
 
     elif scene_key == "cta":
         pass  # CTAテキストは音声で読み上げ。免責はプロフィール欄に掲載
 
     elif scene_key == "no_trade":
-        filters.append(_dt("本日はシグナル見送り", "(w-text_w)/2", 200, 56, "#ff6666"))
+        filters.append(_dt("本日はシグナル見送り", "(w-text_w)/2", 200, 72, "#ff6666"))
         reason = script.get("rejection_reason", "")
         if reason:
-            filters.append(_dt(reason, "(w-text_w)/2", 290, 36, "#cccccc"))
+            filters.append(_dt(reason, "(w-text_w)/2", 300, 48, "#cccccc"))
 
     return filters
 

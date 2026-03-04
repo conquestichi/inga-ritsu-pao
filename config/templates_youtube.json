@@ -4,8 +4,8 @@
     "duration_sec": 1.5,
     "bg": "black",
     "sub_text": "{as_of}",
-    "font_size": 72,
-    "sub_font_size": 36
+    "font_size": 94,
+    "sub_font_size": 48
   },
   "patterns": {
     "A_number_hook": {
