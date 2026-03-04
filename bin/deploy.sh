@@ -11,4 +11,5 @@ echo "[deploy] Fetching origin/$BRANCH ..."
 git fetch origin "$BRANCH"
 git reset --hard "origin/$BRANCH"
 pip install -e . --break-system-packages -q
+cp -n assets/* /srv/inga/assets/ 2>/dev/null || true
 echo "[deploy] $(date '+%Y-%m-%d %H:%M:%S') — deployed $(git rev-parse --short HEAD)"
