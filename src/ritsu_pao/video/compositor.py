@@ -252,7 +252,242 @@ def compose_shorts_template(
     return output_path
 
 
-# ── フォールバックモード (テンプレ未準備時) ──
+# ── シーン切替モード (背景画像複数枚) ──
+
+
+def _build_scene_text(
+    scene_key: str,
+    script: dict,
+    font_path: str | None,
+    enable_expr: str,
+) -> list[str]:
+    """シーンごとのdrawtextフィルタ群を生成（enable付き）"""
+    filters: list[str] = []
+
+    def _dt(text: str, x: int | str, y: int, size: int, color: str) -> str:
+        escaped = _escape_drawtext(text)
+        font_opt = f":fontfile={font_path}" if font_path else ""
+        return (
+            f"drawtext=text='{escaped}'"
+            f":fontsize={size}:fontcolor={color}"
+            f":x={x}:y={y}"
+            f":borderw=3:bordercolor=black"
+            f"{font_opt}"
+            f":enable='{enable_expr}'"
+        )
+
+    if scene_key == "intro":
+        as_of = script.get("as_of", "")
+        if as_of:
+            filters.append(_dt(as_of, "(w-text_w)/2", 140, 52, "white"))
+        filters.append(_dt("因果律", "(w-text_w)/2", 220, 72, "#00eeff"))
+        regime = script.get("regime", "")
+        if regime:
+            color = "#00ff88" if regime == "risk_on" else "#ff4444"
+            label = "RISK ON" if regime == "risk_on" else "RISK OFF"
+            filters.append(_dt(label, "(w-text_w)/2", 320, 48, color))
+
+    elif scene_key == "ticker":
+        ticker = script.get("ticker_display", "")
+        name = script.get("name", "")
+        if ticker or name:
+            filters.append(_dt(f"{ticker}  {name}", "(w-text_w)/2", 160, 68, "white"))
+        score = script.get("score")
+        if score is not None:
+            filters.append(_dt(f"Score: {score}", "(w-text_w)/2", 260, 52, "#ffd700"))
+
+    elif scene_key == "reason":
+        reasons = script.get("reasons_display", [])
+        for i, reason in enumerate(reasons[:3]):
+            text = reason[:40] + "..." if len(reason) > 40 else reason
+            filters.append(_dt(text, "(w-text_w)/2", 160 + i * 70, 40, "#cccccc"))
+        holding = script.get("holding_window", "")
+        if holding:
+            filters.append(_dt(f"想定保有: {holding}", "(w-text_w)/2", 400, 40, "#88aaff"))
+
+    elif scene_key == "cta":
+        filters.append(
+            _dt("投資助言ではありません", "(w-text_w)/2", 180, 36, "#888888")
+        )
+
+    elif scene_key == "no_trade":
+        filters.append(_dt("本日はシグナル見送り", "(w-text_w)/2", 200, 56, "#ff6666"))
+        reason = script.get("rejection_reason", "")
+        if reason:
+            filters.append(_dt(reason, "(w-text_w)/2", 290, 36, "#cccccc"))
+
+    return filters
+
+
+def compose_shorts_scenes(
+    audio_path: Path,
+    audio_segments: dict[str, Path],
+    output_path: Path,
+    script: dict,
+    scene_backgrounds: dict[str, Path],
+    character_clip: Path | None = None,
+    bgm_path: Path | None = None,
+    font_path: str | None = None,
+) -> Path:
+    """シーン切替合成: 背景画像をシーンごとに切替 + テキスト + 律 + BGM
+
+    Args:
+        audio_path: full.wav (全セグメント結合済み)
+        audio_segments: {"hook": hook.wav, "body": body.wav, "cta": cta.wav}
+        scene_backgrounds: {"intro": path, "ticker": path, "reason": path, "cta": path}
+        ...
+    """
+    if not _check_ffmpeg():
+        raise RuntimeError("ffmpeg not found")
+
+    duration = _get_audio_duration(audio_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    w, h = SHORTS_WIDTH, SHORTS_HEIGHT
+
+    # シーンタイミング計算
+    seg_durations = {}
+    for key, path in audio_segments.items():
+        if path.exists():
+            seg_durations[key] = _get_audio_duration(path)
+
+    hook_dur = seg_durations.get("hook", duration * 0.2)
+    body_dur = seg_durations.get("body", duration * 0.5)
+
+    is_trade = script.get("status", "trade") == "trade"
+
+    if is_trade:
+        scenes = [
+            ("intro", 0.0, hook_dur),
+            ("ticker", hook_dur, hook_dur + body_dur * 0.5),
+            ("reason", hook_dur + body_dur * 0.5, hook_dur + body_dur),
+            ("cta", hook_dur + body_dur, duration + 0.5),
+        ]
+    else:
+        scenes = [("no_trade", 0.0, duration + 0.5)]
+
+    # ffmpegコマンド組立
+    inputs: list[str] = []
+    filter_parts: list[str] = []
+    input_idx = 0
+
+    # 背景画像を入力として追加
+    bg_indices: dict[str, int] = {}
+    for scene_key, _, _ in scenes:
+        if scene_key in bg_indices:
+            continue
+        bg_path = scene_backgrounds.get(scene_key)
+        if bg_path and bg_path.exists():
+            inputs.extend(["-loop", "1", "-i", str(bg_path)])
+            bg_indices[scene_key] = input_idx
+            filter_parts.append(
+                f"[{input_idx}:v]scale={w}:{h}:force_original_aspect_ratio=increase,"
+                f"crop={w}:{h},setsar=1[bg_{scene_key}]"
+            )
+            input_idx += 1
+
+    # シーン切替: 各背景にtrim+setpts → concat
+    concat_inputs = []
+    for scene_key, start, end in scenes:
+        scene_dur = end - start
+        if scene_key in bg_indices:
+            label = f"scene_{scene_key}"
+            filter_parts.append(
+                f"[bg_{scene_key}]trim=duration={scene_dur:.2f},setpts=PTS-STARTPTS[{label}]"
+            )
+            concat_inputs.append(f"[{label}]")
+
+    if concat_inputs:
+        n = len(concat_inputs)
+        concat_str = "".join(concat_inputs)
+        filter_parts.append(f"{concat_str}concat=n={n}:v=1:a=0[bg_concat]")
+        current_layer = "bg_concat"
+    else:
+        # フォールバック: 単色
+        inputs.extend([
+            "-f", "lavfi", "-i",
+            f"color=c={BG_COLOR}:s={w}x{h}:d={duration}:r=30",
+        ])
+        filter_parts.append(f"[{input_idx}:v]setsar=1[bg_concat]")
+        current_layer = "bg_concat"
+        input_idx += 1
+
+    # 音声入力
+    inputs.extend(["-i", str(audio_path)])
+    voice_idx = input_idx
+    input_idx += 1
+
+    # BGM
+    bgm_idx = None
+    if bgm_path and bgm_path.exists():
+        inputs.extend(["-stream_loop", "-1", "-i", str(bgm_path)])
+        bgm_idx = input_idx
+        input_idx += 1
+
+    # キャラクターオーバーレイ
+    if character_clip and character_clip.exists():
+        inputs.extend(["-stream_loop", "-1", "-i", str(character_clip)])
+        char_idx = input_idx
+        input_idx += 1
+        if str(character_clip).endswith(".webm"):
+            filter_parts.append(f"[{char_idx}:v]scale=-1:{int(h * 0.75)}[char]")
+        else:
+            filter_parts.append(
+                f"[{char_idx}:v]chromakey=0x00FF00:0.12:0.08,"
+                f"scale=-1:{int(h * 0.75)}[char]"
+            )
+        filter_parts.append(
+            f"[{current_layer}][char]overlay=(W-w)/2:H-h:shortest=1[with_char]"
+        )
+        current_layer = "with_char"
+
+    # シーンごとのテキスト注入 (enable付き)
+    all_text_filters: list[str] = []
+    for scene_key, start, end in scenes:
+        enable = f"between(t\\,{start:.2f}\\,{end:.2f})"
+        scene_texts = _build_scene_text(scene_key, script, font_path, enable)
+        all_text_filters.extend(scene_texts)
+
+    if all_text_filters:
+        text_chain = ",".join(all_text_filters)
+        filter_parts.append(f"[{current_layer}]{text_chain}[with_text]")
+        current_layer = "with_text"
+
+    # 免責テロップ (常時表示)
+    disclaimer = _drawtext(
+        "投資助言ではありません", "(w-text_w)/2", h - 80, 28, "#666666",
+        font_path, border=2,
+    )
+    filter_parts.append(f"[{current_layer}]{disclaimer}[final]")
+    current_layer = "final"
+
+    # 音声ミックス
+    if bgm_idx is not None:
+        filter_parts.append(
+            f"[{bgm_idx}:a]volume=0.12[bgm_low];"
+            f"[{voice_idx}:a][bgm_low]amix=inputs=2:duration=first[audio_out]"
+        )
+        audio_map = "[audio_out]"
+    else:
+        audio_map = f"{voice_idx}:a"
+
+    filter_complex = ";".join(filter_parts)
+    cmd = [
+        "ffmpeg", "-y", *inputs,
+        "-filter_complex", filter_complex,
+        "-map", f"[{current_layer}]", "-map", audio_map,
+        "-t", str(duration + 0.5),
+        "-c:v", "libx264", "-preset", "fast", "-crf", "18",
+        "-c:a", "aac", "-b:a", "192k",
+        "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-r", "30",
+        str(output_path),
+    ]
+    logger.info("Running ffmpeg (scenes mode, %d scenes)", len(scenes))
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        logger.error("ffmpeg failed:\n%s", result.stderr[-1500:])
+        raise RuntimeError(f"ffmpeg failed: {result.stderr[-500:]}")
+    logger.info("Video generated (scenes): %s (%.1fs)", output_path, duration)
+    return output_path
 
 
 def _build_telop_filter(

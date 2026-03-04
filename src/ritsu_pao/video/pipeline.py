@@ -12,6 +12,7 @@ from ritsu_pao.video.voicevox import generate_audio_from_script
 from ritsu_pao.video.compositor import (
     build_telop_lines_from_script,
     compose_shorts,
+    compose_shorts_scenes,
     compose_shorts_template,
 )
 
@@ -84,12 +85,23 @@ def run_video_pipeline(
             bgm_path = c
             break
 
-    # テンプレモード or フォールバック
+    # モード自動選択: テンプレ > シーン切替 > フォールバック
     status = script.get("status", "trade")
     template_key = "template_trade.mp4" if status == "trade" else "template_no_trade.mp4"
     template_path = assets / template_key
 
+    # シーン背景の探索
+    scene_bg_map = {
+        "intro": assets / "bg_intro.png",
+        "ticker": assets / "bg_ticker.png",
+        "reason": assets / "bg_reason.png",
+        "cta": assets / "bg_cta.png",
+        "no_trade": assets / "bg_no_trade.png",
+    }
+    scene_backgrounds = {k: v for k, v in scene_bg_map.items() if v.exists()}
+
     if template_path.exists():
+        # Mode 1: テンプレ動画
         logger.info("Template mode: %s", template_path)
         result = compose_shorts_template(
             template_path=template_path,
@@ -100,8 +112,22 @@ def run_video_pipeline(
             bgm_path=bgm_path,
             font_path=font_path,
         )
+    elif len(scene_backgrounds) >= 2:
+        # Mode 2: シーン切替 (背景画像2枚以上)
+        logger.info("Scenes mode: %d backgrounds", len(scene_backgrounds))
+        result = compose_shorts_scenes(
+            audio_path=audio_path,
+            audio_segments=audio_files,
+            output_path=output_path,
+            script=script,
+            scene_backgrounds=scene_backgrounds,
+            character_clip=character_clip,
+            bgm_path=bgm_path,
+            font_path=font_path,
+        )
     else:
-        logger.info("Fallback mode (no template found)")
+        # Mode 3: フォールバック
+        logger.info("Fallback mode (no template or scenes)")
         background_image = None
         for ext in [".png", ".jpg"]:
             c = assets / f"background{ext}"
