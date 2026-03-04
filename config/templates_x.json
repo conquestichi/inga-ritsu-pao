@@ -1,30 +1,27 @@
 {
-  "templates": {
-    "daily_signal": {
-      "body": [
-        "📊 因果律シグナル {date}\n\n{regime_label}\n\n▶ {ticker_display} {name}（{sector}）\nスコア: {score}\n\n{reason_summary}\n\n#因果律 #日本株 #クオンツ",
-        "🔍 {date} の因果律シグナル\n\nレジーム: {regime_label}\n\n注目: {ticker_display} {name}\nスコア: {score}\n\n{reason_summary}\n\n#因果律 #日本株",
-        "📈 因果律 {date}\n\n{regime_label}\n{ticker_display} {name}（{sector}）\nスコア: {score}\n\n{reason_summary}\n\n#因果律 #クオンツ #AI投資"
-      ],
-      "self_reply": [
-        "⚠️ 免責: これはクオンツシグナルの共有であり、投資助言ではありません。投資判断はご自身の責任でお願いします。\n\n僕の見立ての条件が崩れたら撤退です。\n保有想定: {holding_window}",
-        "📝 補足\n・保有想定: {holding_window}\n・リスクフラグ: {risk_flags}\n\nあくまでシグナルであって助言ではありません。条件変化時は撤退を検討してください。"
-      ]
+  "patterns": {
+    "A_number_hook": {
+      "label": "数字フック",
+      "regime": "risk_on",
+      "body": "【明日上がる日本株】\nプライム{universe_size}銘柄スキャン → スコア{score}点\n\n{name}（{ticker_display}）\n\n{reason_1}\n{reason_2}\n{reason_3}\n\nレジーム: リスクオン\n保有想定: {holding_window}\n\n#因果律 #日本株 #クオンツ",
+      "self_reply": "律は毎日数字だけで判断してます。気になる人はフォローしてください。"
     },
-    "no_trade": {
-      "body": [
-        "📊 因果律シグナル {date}\n\n本日はシグナル品質基準を満たさなかったため、推奨銘柄はありません。\n\n停止理由: {rejection_reasons}\n\n無理にトレードしないことも大切です。\n\n#因果律 #日本株",
-        "🔍 {date} の因果律\n\n品質ゲートNG — 本日のシグナルは見送りです。\n理由: {rejection_reasons}\n\n「やらない判断」も因果律の一部です。\n\n#因果律 #クオンツ"
-      ]
+    "D_warning": {
+      "label": "警告型",
+      "regime": "risk_off",
+      "body": "【因果律】今日はノートレード。\n\nレジームがリスクオフ。律のルールでは無理に出しません。\n休むのも戦略です。\n\n#因果律 #日本株",
+      "self_reply": ""
+    },
+    "F_provoke": {
+      "label": "挑発型",
+      "regime": "risk_on",
+      "body": "まだ勘で銘柄選んでますか？\n\n律はプライム{universe_size}銘柄を毎日スキャン。\n今日のトップ → {name}（{ticker_display}）スコア{score}\n\n{reason_1}\n{reason_2}\n{reason_3}\n\n感覚より数字。\n\n#因果律 #日本株 #AI投資",
+      "self_reply": "保有想定は{holding_window}。レジームはリスクオン。律のシグナル、毎日出してます。"
     }
   },
-  "regime_labels": {
-    "risk_on": "🟢 レジーム: リスクオン",
-    "risk_off": "🔴 レジーム: リスクオフ"
-  },
-  "regime_short": {
-    "risk_on": "リスクオン",
-    "risk_off": "リスクオフ"
-  },
-  "template_selection": "random"
+  "selection_rule": {
+    "risk_on": ["A_number_hook", "F_provoke"],
+    "risk_off": ["D_warning"],
+    "rotation": "alternate"
+  }
 }

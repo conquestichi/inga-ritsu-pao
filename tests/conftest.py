@@ -16,7 +16,7 @@ def sample_candidates_data() -> dict:
             "timezone": "Asia/Tokyo",
             "git_sha": "abc1234",
             "inputs_digest": "sha256:test",
-            "universe_size": 500,
+            "universe_size": 1800,
             "eligible_size": 200,
             "generated_at": "2026-03-03T18:30:00+09:00",
         },

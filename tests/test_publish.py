@@ -100,6 +100,8 @@ class TestGenerateScriptYoutube:
         script = generate_script_youtube(candidates, gates, top1, tmp_config)
         assert script.status == "trade"
         assert "title" in script.upload_meta
+        assert script.title_card.get("text") == "明日上がる日本株"
+        assert "1800" in script.hook or "1800" in script.body
 
     def test_no_trade(self, sample_candidates_data, sample_gates_failed, tmp_config):
         candidates = CandidatesJson.model_validate(sample_candidates_data)

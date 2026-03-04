@@ -1,34 +1,39 @@
 {
-  "templates": {
-    "daily_signal": {
-      "hook": [
-        "こんにちは、因果律の律です。{date}のシグナルをお届けします。",
-        "因果律の律です。今日の注目銘柄、見ていきましょう。",
-        "律です。{date}、因果律が注目した銘柄を共有します。"
-      ],
-      "body": [
-        "現在のレジームは{regime_label}です。\n\n今日の注目は{ticker_display}、{name}。{sector}セクターの銘柄です。\nスコアは{score}。\n\n{reason_detail}\n\n保有想定は{holding_window}です。",
-        "まずレジームから。{regime_label}の状況です。\n\n因果律が注目したのは{ticker_display}の{name}。\nスコア{score}で、{sector}セクターです。\n\n{reason_detail}\n\n想定保有期間は{holding_window}。"
-      ],
-      "cta": [
-        "条件が崩れたら撤退です。あくまでシグナルであって助言ではありません。\nチャンネル登録よろしくお願いします。律でした。",
-        "僕の見立ての前提が変わったら、素直に撤退します。\nこれは投資助言ではなく、シグナルの共有です。\nそれでは、また明日。律でした。"
-      ]
+  "title_card": {
+    "text": "明日上がる日本株",
+    "duration_sec": 1.5,
+    "bg": "black",
+    "sub_text": "{as_of}",
+    "font_size": 72,
+    "sub_font_size": 36
+  },
+  "patterns": {
+    "A_number_hook": {
+      "label": "数字フック",
+      "regime": "risk_on",
+      "hook": "プライム{universe_size}銘柄をスキャンして、スコア{score}点。ダントツ1位です。",
+      "body": "{name}、{ticker_display}。レジームはリスクオン。根拠は3つ。1つ目、{reason_1}。2つ目、{reason_2}。3つ目、{reason_3}。保有想定は{holding_window}。",
+      "cta": "この銘柄、明日どうなるか。律と一緒に追いかけてみてください。チャンネル登録、よろしくお願いします。"
     },
-    "no_trade": {
-      "hook": [
-        "こんにちは、因果律の律です。{date}のシグナル報告です。",
-        "律です。今日の因果律シグナルについてお話しします。"
-      ],
-      "body": [
-        "本日は品質ゲートを通過できなかったため、推奨銘柄はありません。\n\n停止理由は{rejection_reasons}です。\n\n無理にトレードしないことも、大切な判断だと僕は思います。",
-        "今日はシグナルの品質基準を満たせませんでした。\n理由は{rejection_reasons}。\n\nやらない判断も因果律の一部です。"
-      ],
-      "cta": [
-        "明日また改めて分析します。律でした。",
-        "次の営業日にまたお届けします。律でした。"
-      ]
+    "D_warning": {
+      "label": "警告型",
+      "regime": "risk_off",
+      "hook": "今日は、出しません。",
+      "body": "レジームがリスクオフです。律のルールでは、こういう日は無理に銘柄を出しません。品質ゲートも通ってないので、今日はノートレード。休むのも戦略です。",
+      "cta": "相場が動いたら、律はすぐシグナル出します。見逃したくない人は登録しておいてください。"
+    },
+    "F_provoke": {
+      "label": "挑発型",
+      "regime": "risk_on",
+      "hook": "まだ自分の勘で銘柄選んでますか？",
+      "body": "律は毎日プライム{universe_size}銘柄をスキャンして、数字だけで判断してます。今日のトップは{name}、{ticker_display}。スコア{score}。{reason_1}。{reason_2}。{reason_3}。3つの根拠が全部揃ってます。レジームはリスクオン。保有想定は{holding_window}。",
+      "cta": "感覚より数字。律のシグナル、毎日出してます。"
     }
+  },
+  "selection_rule": {
+    "risk_on": ["A_number_hook", "F_provoke"],
+    "risk_off": ["D_warning"],
+    "rotation": "alternate"
   },
   "voicepeak": {
     "speaker": "律",
@@ -37,19 +42,10 @@
     "volume": 0
   },
   "upload_meta": {
-    "title_template": "【因果律】{date} {ticker_display} {name} #{regime_short}",
-    "description_template": "因果律のAI律が{date}の日本株シグナルを解説します。\n\n⚠️ これは投資助言ではありません。投資判断はご自身の責任でお願いします。\n\n#因果律 #日本株 #クオンツ #AI投資 #Shorts",
-    "tags": ["因果律", "日本株", "クオンツ", "AI投資", "Shorts"],
+    "title_template": "明日上がる日本株｜{as_of}｜因果律 AI シグナル",
+    "description_template": "AIクオンツ「因果律」が毎日プライム{universe_size}銘柄から選定。\n律が数字だけで判断した注目銘柄を解説します。\n\n#日本株 #AI #クオンツ #因果律",
+    "tags": ["日本株", "AI", "クオンツ", "因果律", "投資", "株式", "シグナル"],
     "category_id": "22",
     "privacy_status": "public"
-  },
-  "regime_labels": {
-    "risk_on": "リスクオン",
-    "risk_off": "リスクオフ"
-  },
-  "regime_short": {
-    "risk_on": "リスクオン",
-    "risk_off": "リスクオフ"
-  },
-  "template_selection": "random"
+  }
 }

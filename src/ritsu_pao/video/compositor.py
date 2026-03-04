@@ -276,7 +276,17 @@ def _build_scene_text(
             f":enable='{enable_expr}'"
         )
 
-    if scene_key == "intro":
+    if scene_key == "title_card":
+        tc = script.get("title_card", {})
+        text = tc.get("text", "明日上がる日本株")
+        sub_text = tc.get("sub_text", "")
+        tc_font_size = tc.get("font_size", 72)
+        tc_sub_font_size = tc.get("sub_font_size", 36)
+        filters.append(_dt(text, "(w-text_w)/2", 800, tc_font_size, "white"))
+        if sub_text:
+            filters.append(_dt(sub_text, "(w-text_w)/2", 900, tc_sub_font_size, "#aaaaaa"))
+
+    elif scene_key == "intro":
         as_of = script.get("as_of", "")
         if as_of:
             filters.append(_dt(as_of, "(w-text_w)/2", 140, 52, "white"))
@@ -306,9 +316,7 @@ def _build_scene_text(
             filters.append(_dt(f"想定保有: {holding}", "(w-text_w)/2", 400, 40, "#88aaff"))
 
     elif scene_key == "cta":
-        filters.append(
-            _dt("投資助言ではありません", "(w-text_w)/2", 180, 36, "#888888")
-        )
+        pass  # CTAテキストは音声で読み上げ。免責はプロフィール欄に掲載
 
     elif scene_key == "no_trade":
         filters.append(_dt("本日はシグナル見送り", "(w-text_w)/2", 200, 56, "#ff6666"))
@@ -328,6 +336,7 @@ def compose_shorts_scenes(
     character_clip: Path | None = None,
     bgm_path: Path | None = None,
     font_path: str | None = None,
+    title_card: dict | None = None,
 ) -> Path:
     """シーン切替合成: 背景画像をシーンごとに切替 + テキスト + 律 + BGM
 
@@ -335,6 +344,7 @@ def compose_shorts_scenes(
         audio_path: full.wav (全セグメント結合済み)
         audio_segments: {"hook": hook.wav, "body": body.wav, "cta": cta.wav}
         scene_backgrounds: {"intro": path, "ticker": path, "reason": path, "cta": path}
+        title_card: {"text": str, "sub_text": str, "duration_sec": float, ...}
         ...
     """
     if not _check_ffmpeg():
@@ -343,6 +353,11 @@ def compose_shorts_scenes(
     duration = _get_audio_duration(audio_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     w, h = SHORTS_WIDTH, SHORTS_HEIGHT
+
+    # タイトルカード時間
+    tc_dur = 0.0
+    if title_card:
+        tc_dur = title_card.get("duration_sec", 1.5)
 
     # シーンタイミング計算
     seg_durations = {}
@@ -355,25 +370,44 @@ def compose_shorts_scenes(
 
     is_trade = script.get("status", "trade") == "trade"
 
+    scenes: list[tuple[str, float, float]] = []
+
+    # タイトルカードシーン (音声なし、黒背景)
+    if title_card:
+        scenes.append(("title_card", 0.0, tc_dur))
+
     if is_trade:
-        scenes = [
-            ("intro", 0.0, hook_dur),
-            ("ticker", hook_dur, hook_dur + body_dur * 0.5),
-            ("reason", hook_dur + body_dur * 0.5, hook_dur + body_dur),
-            ("cta", hook_dur + body_dur, duration + 0.5),
-        ]
+        scenes.extend([
+            ("intro", tc_dur, tc_dur + hook_dur),
+            ("ticker", tc_dur + hook_dur, tc_dur + hook_dur + body_dur * 0.5),
+            ("reason", tc_dur + hook_dur + body_dur * 0.5, tc_dur + hook_dur + body_dur),
+            ("cta", tc_dur + hook_dur + body_dur, tc_dur + duration + 0.5),
+        ])
     else:
-        scenes = [("no_trade", 0.0, duration + 0.5)]
+        scenes.append(("no_trade", tc_dur, tc_dur + duration + 0.5))
+
+    total_duration = tc_dur + duration + 0.5
 
     # ffmpegコマンド組立
     inputs: list[str] = []
     filter_parts: list[str] = []
     input_idx = 0
 
+    # タイトルカード背景 (黒色lavfi)
+    tc_bg_idx = None
+    if title_card:
+        inputs.extend([
+            "-f", "lavfi", "-i",
+            f"color=c=black:s={w}x{h}:d={tc_dur}:r=30",
+        ])
+        tc_bg_idx = input_idx
+        filter_parts.append(f"[{input_idx}:v]setsar=1[bg_title_card]")
+        input_idx += 1
+
     # 背景画像を入力として追加
     bg_indices: dict[str, int] = {}
     for scene_key, _, _ in scenes:
-        if scene_key in bg_indices:
+        if scene_key == "title_card" or scene_key in bg_indices:
             continue
         bg_path = scene_backgrounds.get(scene_key)
         if bg_path and bg_path.exists():
@@ -389,7 +423,13 @@ def compose_shorts_scenes(
     concat_inputs = []
     for scene_key, start, end in scenes:
         scene_dur = end - start
-        if scene_key in bg_indices:
+        if scene_key == "title_card" and tc_bg_idx is not None:
+            label = "scene_title_card"
+            filter_parts.append(
+                f"[bg_title_card]trim=duration={scene_dur:.2f},setpts=PTS-STARTPTS[{label}]"
+            )
+            concat_inputs.append(f"[{label}]")
+        elif scene_key in bg_indices:
             label = f"scene_{scene_key}"
             filter_parts.append(
                 f"[bg_{scene_key}]trim=duration={scene_dur:.2f},setpts=PTS-STARTPTS[{label}]"
@@ -415,6 +455,16 @@ def compose_shorts_scenes(
     inputs.extend(["-i", str(audio_path)])
     voice_idx = input_idx
     input_idx += 1
+
+    # タイトルカードがある場合、音声を遅延
+    if tc_dur > 0:
+        delay_ms = int(tc_dur * 1000)
+        filter_parts.append(
+            f"[{voice_idx}:a]adelay={delay_ms}|{delay_ms}[voice_delayed]"
+        )
+        voice_label = "voice_delayed"
+    else:
+        voice_label = f"{voice_idx}:a"
 
     # BGM
     bgm_idx = None
@@ -452,30 +502,26 @@ def compose_shorts_scenes(
         filter_parts.append(f"[{current_layer}]{text_chain}[with_text]")
         current_layer = "with_text"
 
-    # 免責テロップ (常時表示)
-    disclaimer = _drawtext(
-        "投資助言ではありません", "(w-text_w)/2", h - 80, 28, "#666666",
-        font_path, border=2,
-    )
-    filter_parts.append(f"[{current_layer}]{disclaimer}[final]")
+    # 最終レイヤー確定 (免責テロップは動画外 — プロフィール欄に掲載)
+    filter_parts.append(f"[{current_layer}]null[final]")
     current_layer = "final"
 
     # 音声ミックス
     if bgm_idx is not None:
         filter_parts.append(
             f"[{bgm_idx}:a]volume=0.12[bgm_low];"
-            f"[{voice_idx}:a][bgm_low]amix=inputs=2:duration=first[audio_out]"
+            f"[{voice_label}][bgm_low]amix=inputs=2:duration=first[audio_out]"
         )
         audio_map = "[audio_out]"
     else:
-        audio_map = f"{voice_idx}:a"
+        audio_map = f"[{voice_label}]" if tc_dur > 0 else f"{voice_idx}:a"
 
     filter_complex = ";".join(filter_parts)
     cmd = [
         "ffmpeg", "-y", *inputs,
         "-filter_complex", filter_complex,
         "-map", f"[{current_layer}]", "-map", audio_map,
-        "-t", str(duration + 0.5),
+        "-t", str(total_duration),
         "-c:v", "libx264", "-preset", "fast", "-crf", "18",
         "-c:a", "aac", "-b:a", "192k",
         "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-r", "30",

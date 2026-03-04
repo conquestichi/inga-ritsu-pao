@@ -1,7 +1,7 @@
-"""台本生成モジュール — テンプレ80% + 差分20%
+"""台本生成モジュール — パターンA/D/F + レジーム連動選択
 
-テンプレートからランダム選択し、candidates.jsonの差分データを注入。
-律ペルソナに完全準拠。
+テンプレートからレジームに応じたパターンを選択し、
+candidates.jsonの差分データを注入。律ペルソナに完全準拠。
 """
 
 from __future__ import annotations
@@ -30,14 +30,12 @@ from ritsu_pao.publish.sanitize import (
 
 CONFIG_DIR = Path(__file__).resolve().parents[3] / "config"
 
+# ローテーション状態（プロセス内。日次1回実行なので十分）
+_rotation_index: dict[str, int] = {}
+
 
 def _load_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
-
-
-def _pick(templates: list[str]) -> str:
-    """テンプレートリストからランダム選択"""
-    return random.choice(templates)
 
 
 def _fill(template: str, ctx: dict[str, Any]) -> str:
@@ -48,20 +46,43 @@ def _fill(template: str, ctx: dict[str, Any]) -> str:
     return result
 
 
+def _select_pattern(
+    patterns: dict[str, Any],
+    selection_rule: dict[str, Any],
+    regime: str,
+    channel: str,
+) -> tuple[str, dict[str, Any]]:
+    """レジームに応じたパターンを選択（alternate or random）"""
+    candidates_keys = selection_rule.get(regime, [])
+    if not candidates_keys:
+        candidates_keys = selection_rule.get("risk_on", list(patterns.keys())[:1])
+
+    rotation = selection_rule.get("rotation", "random")
+    rot_key = f"{channel}_{regime}"
+
+    if rotation == "alternate":
+        idx = _rotation_index.get(rot_key, 0)
+        key = candidates_keys[idx % len(candidates_keys)]
+        _rotation_index[rot_key] = idx + 1
+    else:
+        key = random.choice(candidates_keys)
+
+    return key, patterns[key]
+
+
 def _build_context(
     candidate: Candidate | None,
     gates: GatesResult,
     as_of: str,
-    templates_cfg: dict[str, Any],
+    meta_universe_size: int = 1800,
 ) -> dict[str, Any]:
     """テンプレート注入用コンテキストを構築"""
-    regime_labels = templates_cfg.get("regime_labels", {})
-    regime_short = templates_cfg.get("regime_short", {})
-
     ctx: dict[str, Any] = {
+        "as_of": as_of,
         "date": as_of,
-        "regime_label": regime_labels.get(gates.regime, gates.regime),
-        "regime_short": regime_short.get(gates.regime, gates.regime),
+        "universe_size": str(meta_universe_size),
+        "regime_label": "リスクオン" if gates.regime == "risk_on" else "リスクオフ",
+        "regime_short": "リスクオン" if gates.regime == "risk_on" else "リスクオフ",
     }
 
     if candidate:
@@ -71,12 +92,14 @@ def _build_context(
                 "name": candidate.name,
                 "sector": candidate.sector,
                 "score": f"{candidate.score:.1f}",
+                "holding_window": candidate.holding_window,
                 "reason_summary": build_reason_summary(candidate),
                 "reason_detail": build_reason_detail(candidate),
-                "holding_window": candidate.holding_window,
                 "risk_flags": format_risk_flags(candidate.risk_flags),
             }
         )
+        for i, r in enumerate(candidate.reasons_top3[:3]):
+            ctx[f"reason_{i + 1}"] = r.note
 
     if gates.rejection_reasons:
         ctx["rejection_reasons"] = "、".join(gates.rejection_reasons)
@@ -97,17 +120,22 @@ def generate_script_x(
     cfg_dir = config_dir or CONFIG_DIR
     tmpl = _load_json(cfg_dir / "templates_x.json")
     as_of = candidates.meta.as_of
-    ctx = _build_context(top1, gates, as_of, tmpl)
+    universe_size = candidates.meta.universe_size or 1800
+    ctx = _build_context(top1, gates, as_of, universe_size)
+
+    patterns = tmpl["patterns"]
+    selection_rule = tmpl["selection_rule"]
 
     if gates.all_passed and top1:
-        tpl = tmpl["templates"]["daily_signal"]
-        body = _fill(_pick(tpl["body"]), ctx)
-        self_reply = _fill(_pick(tpl["self_reply"]), ctx)
+        regime = gates.regime
+        _key, pattern = _select_pattern(patterns, selection_rule, regime, "x")
+        body = _fill(pattern["body"], ctx)
+        self_reply = _fill(pattern.get("self_reply", ""), ctx)
         status = "trade"
     else:
-        tpl = tmpl["templates"]["no_trade"]
-        body = _fill(_pick(tpl["body"]), ctx)
-        self_reply = ""
+        _key, pattern = _select_pattern(patterns, selection_rule, "risk_off", "x")
+        body = _fill(pattern["body"], ctx)
+        self_reply = _fill(pattern.get("self_reply", ""), ctx)
         status = "no_trade"
 
     return ScriptXJson(
@@ -119,7 +147,8 @@ def generate_script_x(
             "ticker": top1.ticker if top1 else None,
             "score": top1.score if top1 else None,
             "regime": gates.regime,
-            "template_version": "v1",
+            "pattern": _key,
+            "template_version": "v2",
         },
     )
 
@@ -137,13 +166,29 @@ def generate_script_youtube(
     cfg_dir = config_dir or CONFIG_DIR
     tmpl = _load_json(cfg_dir / "templates_youtube.json")
     as_of = candidates.meta.as_of
-    ctx = _build_context(top1, gates, as_of, tmpl)
+    universe_size = candidates.meta.universe_size or 1800
+    ctx = _build_context(top1, gates, as_of, universe_size)
+
+    patterns = tmpl["patterns"]
+    selection_rule = tmpl["selection_rule"]
+
+    # タイトルカード
+    title_card_cfg = tmpl.get("title_card", {})
+    title_card = {
+        "text": title_card_cfg.get("text", "明日上がる日本株"),
+        "sub_text": _fill(title_card_cfg.get("sub_text", "{as_of}"), ctx),
+        "duration_sec": title_card_cfg.get("duration_sec", 1.5),
+        "bg": title_card_cfg.get("bg", "black"),
+        "font_size": title_card_cfg.get("font_size", 72),
+        "sub_font_size": title_card_cfg.get("sub_font_size", 36),
+    }
 
     if gates.all_passed and top1:
-        tpl = tmpl["templates"]["daily_signal"]
-        hook = _fill(_pick(tpl["hook"]), ctx)
-        body = _fill(_pick(tpl["body"]), ctx)
-        cta = _fill(_pick(tpl["cta"]), ctx)
+        regime = gates.regime
+        _key, pattern = _select_pattern(patterns, selection_rule, regime, "youtube")
+        hook = _fill(pattern["hook"], ctx)
+        body = _fill(pattern["body"], ctx)
+        cta = _fill(pattern["cta"], ctx)
         status = "trade"
 
         upload_meta_tmpl = tmpl.get("upload_meta", {})
@@ -155,10 +200,10 @@ def generate_script_youtube(
             "privacy_status": upload_meta_tmpl.get("privacy_status", "public"),
         }
     else:
-        tpl = tmpl["templates"]["no_trade"]
-        hook = _fill(_pick(tpl["hook"]), ctx)
-        body = _fill(_pick(tpl["body"]), ctx)
-        cta = _fill(_pick(tpl["cta"]), ctx)
+        _key, pattern = _select_pattern(patterns, selection_rule, "risk_off", "youtube")
+        hook = _fill(pattern["hook"], ctx)
+        body = _fill(pattern["body"], ctx)
+        cta = _fill(pattern["cta"], ctx)
         status = "no_trade"
         upload_meta = {}
 
@@ -168,6 +213,7 @@ def generate_script_youtube(
         hook=hook,
         body=body,
         cta=cta,
+        title_card=title_card,
         voicepeak=tmpl.get("voicepeak", {}),
         upload_meta=upload_meta,
     )
