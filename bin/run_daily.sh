@@ -82,13 +82,29 @@ python3 -m ritsu_pao.notify.cli \
 X_CREDS="/srv/inga/config/x_credentials.json"
 if [[ -f "$X_CREDS" && "$META_STATUS" == "ok" ]]; then
     echo "[ritsu-pao] Posting to X..."
-    python3 -m ritsu_pao.post.cli \
+    python3 -m ritsu_pao.post.cli x \
         --publish-dir "$PUBLISH_OUTPUT" \
         --credentials "$X_CREDS" \
     && echo "[ritsu-pao] X post complete" \
     || echo "[ritsu-pao] WARN: X post failed (non-fatal)"
 else
     echo "[ritsu-pao] Skipping X post (creds=$([[ -f "$X_CREDS" ]] && echo 'found' || echo 'missing'), status=$META_STATUS)"
+fi
+
+# ── YouTubeアップロード ──
+YT_SECRET="/srv/inga/config/client_secret.json"
+YT_TOKEN="/srv/inga/config/youtube_token.json"
+YT_VIDEO="$PUBLISH_OUTPUT/final.mp4"
+if [[ -f "$YT_SECRET" && -f "$YT_TOKEN" && -f "$YT_VIDEO" && "$META_STATUS" == "ok" ]]; then
+    echo "[ritsu-pao] Uploading to YouTube..."
+    python3 -m ritsu_pao.post.cli youtube \
+        --publish-dir "$PUBLISH_OUTPUT" \
+        --client-secret "$YT_SECRET" \
+        --token "$YT_TOKEN" \
+    && echo "[ritsu-pao] YouTube upload complete" \
+    || echo "[ritsu-pao] WARN: YouTube upload failed (non-fatal)"
+else
+    echo "[ritsu-pao] Skipping YouTube upload (secret=$([[ -f "$YT_SECRET" ]] && echo 'found' || echo 'missing'), token=$([[ -f "$YT_TOKEN" ]] && echo 'found' || echo 'missing'), video=$([[ -f "$YT_VIDEO" ]] && echo 'found' || echo 'missing'), status=$META_STATUS)"
 fi
 
 echo "[ritsu-pao] Pipeline complete"

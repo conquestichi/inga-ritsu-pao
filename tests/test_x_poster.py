@@ -51,8 +51,8 @@ def script_trade() -> ScriptXJson:
     return ScriptXJson(
         date="2026-03-04",
         status="trade",
-        body="【明日上がる日本株】\nプライム1800銘柄スキャン → スコア85.3点\n\nTDK（7203）\n\n#因果律",
-        self_reply="律は毎日数字だけで判断してます。",
+        body="📊 因果律（2026-03-04）\n学習AI 因果quantsが1800銘柄から選出\n\n律の注目 → TDK（7203）",
+        self_reply="律の撤退ライン：VWAP乖離が反転なら手を出しません。",
         meta={"ticker": "72030", "score": 85.3, "regime": "risk_on", "pattern": "A_number_hook"},
     )
 
@@ -62,7 +62,7 @@ def script_no_trade() -> ScriptXJson:
     return ScriptXJson(
         date="2026-03-04",
         status="no_trade",
-        body="【因果律】今日はノートレード。\n\nレジームがリスクオフ。\n#因果律",
+        body="⛔ 因果律（2026-03-04）\nレジーム：リスクオフ\n今日の律の結論 → 見送り",
         self_reply="",
         meta={"regime": "risk_off", "pattern": "D_warning"},
     )
@@ -135,10 +135,9 @@ class TestPostTweet:
         mock_client = MagicMock()
         mock_build.return_value = mock_client
 
-        # メインツイート
         mock_client.create_tweet.side_effect = [
-            MagicMock(data={"id": "111"}),  # main tweet
-            MagicMock(data={"id": "222"}),  # self-reply
+            MagicMock(data={"id": "111"}),
+            MagicMock(data={"id": "222"}),
         ]
 
         result = post_tweet(script_trade, meta_ok, creds)
@@ -147,7 +146,6 @@ class TestPostTweet:
         assert result.reply_id == "222"
         assert mock_client.create_tweet.call_count == 2
 
-        # 2回目の呼び出しが in_reply_to_tweet_id を含むか
         _, kwargs = mock_client.create_tweet.call_args_list[1]
         assert kwargs["in_reply_to_tweet_id"] == "111"
 
@@ -189,52 +187,37 @@ class TestPostTweet:
 
 
 class TestCli:
-    def test_cli_dry_run(self, tmp_path: Path) -> None:
+    def test_cli_x_dry_run(self, tmp_path: Path) -> None:
         from ritsu_pao.post.cli import main
 
-        # publish dir
         pub = tmp_path / "publish"
         pub.mkdir()
         (pub / "meta.json").write_text(
-            json.dumps(
-                {
-                    "date": "2026-03-04",
-                    "status": "ok",
-                    "generated_at": "2026-03-04T19:00:00",
-                    "run_id": "t1",
-                }
-            )
+            json.dumps({
+                "date": "2026-03-04", "status": "ok",
+                "generated_at": "2026-03-04T19:00:00", "run_id": "t1",
+            })
         )
         (pub / "script_x.json").write_text(
-            json.dumps(
-                {
-                    "date": "2026-03-04",
-                    "status": "trade",
-                    "body": "test tweet",
-                    "self_reply": "",
-                }
-            )
+            json.dumps({
+                "date": "2026-03-04", "status": "trade",
+                "body": "test tweet", "self_reply": "",
+            })
         )
 
         creds = tmp_path / "creds.json"
         creds.write_text(
-            json.dumps(
-                {
-                    "consumer_key": "ck",
-                    "consumer_secret": "cs",
-                    "access_token": "at",
-                    "access_token_secret": "ats",
-                }
-            )
+            json.dumps({
+                "consumer_key": "ck", "consumer_secret": "cs",
+                "access_token": "at", "access_token_secret": "ats",
+            })
         )
 
-        rc = main(
-            ["--publish-dir", str(pub), "--credentials", str(creds), "--dry-run"]
-        )
+        rc = main(["x", "--publish-dir", str(pub), "--credentials", str(creds), "--dry-run"])
         assert rc == 0
         assert (pub / "x_post_result.json").exists()
 
-    def test_cli_missing_meta(self, tmp_path: Path) -> None:
+    def test_cli_x_missing_meta(self, tmp_path: Path) -> None:
         from ritsu_pao.post.cli import main
 
         pub = tmp_path / "publish"
@@ -242,5 +225,5 @@ class TestCli:
         creds = tmp_path / "creds.json"
         creds.write_text("{}")
 
-        rc = main(["--publish-dir", str(pub), "--credentials", str(creds)])
+        rc = main(["x", "--publish-dir", str(pub), "--credentials", str(creds)])
         assert rc == 1
