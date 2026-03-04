@@ -3,20 +3,20 @@
     "A_number_hook": {
       "label": "数字フック＋二択",
       "regime": "risk_on",
-      "body": "20:00更新（{date}）\nレジーム：{regime_label}\n結論：監視｜{name}（{ticker_display}）スコア{score}\n\n{reason_1}\n{reason_2}\n{reason_3}\n\n崩れる条件：{condition_a} / {condition_b}\nどっちを想定？理由も\n\n観測：{watch}\n※監査：gate {gate_status}（IC {wf_ic}）",
-      "self_reply": "反証条件：{condition_b}なら撤退。保有想定{holding_window}。\n完全版（根拠・監査ログ）はプロフィール固定から。"
+      "body": "📊 因果律（{date}）\n60日分の分足データで学習 → {universe_size}銘柄から選出\n\n律の注目 → {name}（{ticker_display}）\nスコア：{score} / 100\n{ic_display}\n\n根拠（因果quantsが検出）\n・{reason_1}\n・{reason_2}\n・{reason_3}\n\n律の見立てが崩れる条件：{condition_b}\n→ あなたはどう見る？理由も聞かせて\n\n品質ゲート：{gate_status}",
+      "self_reply": "律の撤退ライン：{condition_b}なら手を出しません。保有想定{holding_window}。\n詳しい根拠と監査ログはプロフィール固定から。"
     },
     "D_warning": {
       "label": "警告型＋監査提示",
       "regime": "risk_off",
-      "body": "20:00更新（{date}）\nレジーム：{regime_label}\n結論：NO_TRADE\n\n品質ゲート：{fail_reason}\n律のルールでは条件を満たさないとき出しません。\n\n休むのも戦略。この判断、妥当だと思う？\n異論は「出すべき理由」を1つ挙げてください。",
+      "body": "⛔ 因果律（{date}）\nレジーム：{regime_label}\n\n今日の律の結論 → 見送り\n理由：{fail_reason}\n{ic_display}\n\n因果quantsは5段階の品質ゲートを毎日通してます。\n自信がないときは出さない。それが律のルールです。\n\nこの「見送り判断」、妥当だと思いますか？\nそれとも今日は出すべき？理由を教えてください。",
       "self_reply": ""
     },
     "F_provoke": {
       "label": "反証条件型",
       "regime": "risk_on",
-      "body": "20:00更新（{date}）\nレジーム：{regime_label}\n{name}（{ticker_display}）スコア{score}\n\n律の判断が外れる条件：{condition_b}\nこの読みが崩れるなら撤退。\n\n異論歓迎：あなたの撤退条件はどこ？\n\n観測：{watch}\n※監査：gate {gate_status}",
-      "self_reply": "根拠：{reason_1} / {reason_2} / {reason_3}\n保有想定{holding_window}。条件崩れたら撤退です。"
+      "body": "🤖 因果律（{date}）\n60日分の分足データで学習 → {name}（{ticker_display}）スコア{score}\n\n因果quantsはこう読んでます。\nでも律が考える外れ条件 → {condition_b}\n\nあなたならどこで撤退しますか？\n条件を1つ教えてください。\n\n品質ゲート：{gate_status}｜{ic_display}",
+      "self_reply": "律が見ている根拠（{universe_size}銘柄から検出）\n・{reason_1}\n・{reason_2}\n・{reason_3}\n保有想定{holding_window}。条件が崩れたら素直に撤退です。"
     }
   },
   "selection_rule": {

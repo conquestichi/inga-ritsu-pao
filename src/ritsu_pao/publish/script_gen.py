@@ -33,31 +33,37 @@ CONFIG_DIR = Path(__file__).resolve().parents[3] / "config"
 # ローテーション状態（プロセス内。日次1回実行なので十分）
 _rotation_index: dict[str, int] = {}
 
-# 特徴量名 → 日本語ラベル（観測指標・反証条件用）
+# 特徴量名 → 日本語ラベル（専門用語キープ＋すごそう感）
 _FEATURE_LABELS: dict[str, str] = {
     "minute_vwap_dev": "VWAP乖離",
     "momentum_5d": "5日モメンタム",
     "momentum_10d": "10日モメンタム",
     "momentum_20d": "20日モメンタム",
-    "volume_ratio": "出来高比率",
-    "volume_breakout": "出来高ブレイク",
-    "short_interest_change": "空売り残変化",
-    "short_interest_ratio": "空売り比率",
-    "margin_buy_change": "信用買い残変化",
-    "margin_sell_change": "信用売り残変化",
-    "rsi_14d": "RSI(14)",
-    "bb_position": "ボリンジャー位置",
-    "macd_signal": "MACDシグナル",
-    "cross_asset_usdjpy": "ドル円",
-    "cross_asset_vix": "VIX",
+    "volume_ratio": "出来高レシオ",
+    "volume_breakout": "出来高ブレイクアウト",
+    "short_interest_change": "空売り残変動",
+    "short_interest_ratio": "貸借倍率",
+    "margin_buy_change": "信用買い残変動",
+    "margin_sell_change": "信用売り残変動",
+    "rsi_14d": "RSI(14日)",
+    "bb_position": "ボリンジャーバンド位置",
+    "macd_signal": "MACDクロス",
+    "cross_asset_usdjpy": "ドル円連動",
+    "cross_asset_vix": "VIX恐怖指数",
     "earnings_surprise": "決算サプライズ",
-    "tdnet_disclosure": "適時開示",
+    "tdnet_disclosure": "適時開示シグナル",
 }
 
 
 def _feature_label(feature_name: str) -> str:
     """特徴量名を日本語ラベルに変換"""
     return _FEATURE_LABELS.get(feature_name, feature_name)
+
+
+def _simplify_reason(note: str, feature: str, direction: str) -> str:
+    """reason noteを方向付きで表示（専門用語＋数値キープ）"""
+    arrow = "↑" if direction == "bullish" else "↓"
+    return f"{arrow} {note}"
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -111,14 +117,39 @@ def _build_context(
         "regime_short": "リスクオン" if gates.regime == "risk_on" else "リスクオフ",
     }
 
-    # 品質ゲート情報
+    # 品質ゲート情報（学習モデル感＋数値）
     if gates.all_passed:
-        ctx["gate_status"] = "PASS"
+        ctx["gate_status"] = "全5項目クリア ✅"
     else:
-        ctx["gate_status"] = "NO_TRADE"
+        ctx["gate_status"] = "基準未達 ⛔"
+    # IC → 予測精度スコア（基準比較で高低がわかるように）
+    if gates.wf_ic is not None:
+        ctx["wf_ic"] = f"{gates.wf_ic:.3f}"
+        # IC 0.02以上が実用基準という前提
+        if gates.wf_ic >= 0.04:
+            ctx["ic_display"] = f"予測精度 {gates.wf_ic:.3f}（基準の{gates.wf_ic / 0.02:.1f}倍）"
+        elif gates.wf_ic >= 0.02:
+            ctx["ic_display"] = f"予測精度 {gates.wf_ic:.3f}（基準クリア）"
+        else:
+            ctx["ic_display"] = f"予測精度 {gates.wf_ic:.3f}（基準未達）"
+    else:
+        ctx["wf_ic"] = "N/A"
+        ctx["ic_display"] = ""
     if gates.rejection_reasons:
-        ctx["rejection_reasons"] = "、".join(gates.rejection_reasons)
-        ctx["fail_reason"] = gates.rejection_reasons[0]
+        # 技術的な理由を素人向けに変換
+        reason_map: dict[str, str] = {
+            "walk_forward_ic_low": "学習モデルの予測精度が基準未達",
+            "param_stability_failed": "モデルパラメータの安定性不足",
+            "cost_test_failed": "手数料込みで利益が出ない",
+            "leak_detection": "学習データの漏洩検知",
+            "ticker_split_cv_failed": "銘柄間の検証で偏り検出",
+        }
+        ctx["rejection_reasons"] = "、".join(
+            reason_map.get(r, r) for r in gates.rejection_reasons
+        )
+        ctx["fail_reason"] = reason_map.get(
+            gates.rejection_reasons[0], gates.rejection_reasons[0]
+        )
     else:
         ctx["rejection_reasons"] = ""
         ctx["fail_reason"] = "なし"
@@ -140,7 +171,7 @@ def _build_context(
             }
         )
         for i, r in enumerate(candidate.reasons_top3[:3]):
-            ctx[f"reason_{i + 1}"] = r.note
+            ctx[f"reason_{i + 1}"] = _simplify_reason(r.note, r.feature, r.direction)
 
         # 反証条件・観測指標（トップ理由から生成）
         top = candidate.reasons_top3[0] if candidate.reasons_top3 else None
