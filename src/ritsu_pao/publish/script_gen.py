@@ -33,6 +33,32 @@ CONFIG_DIR = Path(__file__).resolve().parents[3] / "config"
 # ローテーション状態（プロセス内。日次1回実行なので十分）
 _rotation_index: dict[str, int] = {}
 
+# 特徴量名 → 日本語ラベル（観測指標・反証条件用）
+_FEATURE_LABELS: dict[str, str] = {
+    "minute_vwap_dev": "VWAP乖離",
+    "momentum_5d": "5日モメンタム",
+    "momentum_10d": "10日モメンタム",
+    "momentum_20d": "20日モメンタム",
+    "volume_ratio": "出来高比率",
+    "volume_breakout": "出来高ブレイク",
+    "short_interest_change": "空売り残変化",
+    "short_interest_ratio": "空売り比率",
+    "margin_buy_change": "信用買い残変化",
+    "margin_sell_change": "信用売り残変化",
+    "rsi_14d": "RSI(14)",
+    "bb_position": "ボリンジャー位置",
+    "macd_signal": "MACDシグナル",
+    "cross_asset_usdjpy": "ドル円",
+    "cross_asset_vix": "VIX",
+    "earnings_surprise": "決算サプライズ",
+    "tdnet_disclosure": "適時開示",
+}
+
+
+def _feature_label(feature_name: str) -> str:
+    """特徴量名を日本語ラベルに変換"""
+    return _FEATURE_LABELS.get(feature_name, feature_name)
+
 
 def _load_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
@@ -85,6 +111,21 @@ def _build_context(
         "regime_short": "リスクオン" if gates.regime == "risk_on" else "リスクオフ",
     }
 
+    # 品質ゲート情報
+    if gates.all_passed:
+        ctx["gate_status"] = "PASS"
+    else:
+        ctx["gate_status"] = "NO_TRADE"
+    if gates.rejection_reasons:
+        ctx["rejection_reasons"] = "、".join(gates.rejection_reasons)
+        ctx["fail_reason"] = gates.rejection_reasons[0]
+    else:
+        ctx["rejection_reasons"] = ""
+        ctx["fail_reason"] = "なし"
+
+    # WF IC
+    ctx["wf_ic"] = f"{gates.wf_ic:.3f}" if gates.wf_ic is not None else "N/A"
+
     if candidate:
         ctx.update(
             {
@@ -101,8 +142,26 @@ def _build_context(
         for i, r in enumerate(candidate.reasons_top3[:3]):
             ctx[f"reason_{i + 1}"] = r.note
 
-    if gates.rejection_reasons:
-        ctx["rejection_reasons"] = "、".join(gates.rejection_reasons)
+        # 反証条件・観測指標（トップ理由から生成）
+        top = candidate.reasons_top3[0] if candidate.reasons_top3 else None
+        if top:
+            feature_label = _feature_label(top.feature)
+            if top.direction == "bullish":
+                ctx["condition_a"] = f"{feature_label}が強気継続"
+                ctx["condition_b"] = f"{feature_label}が反転"
+            else:
+                ctx["condition_a"] = f"{feature_label}が弱気継続"
+                ctx["condition_b"] = f"{feature_label}が反転上昇"
+            ctx["watch"] = feature_label
+        else:
+            ctx["condition_a"] = "シグナル継続"
+            ctx["condition_b"] = "シグナル反転"
+            ctx["watch"] = ctx.get("regime_label", "レジーム")
+
+    else:
+        ctx["condition_a"] = "レジーム回復"
+        ctx["condition_b"] = "リスクオフ継続"
+        ctx["watch"] = ctx.get("regime_label", "レジーム")
 
     return ctx
 

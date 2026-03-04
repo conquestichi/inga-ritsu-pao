@@ -1,22 +1,22 @@
 {
   "patterns": {
     "A_number_hook": {
-      "label": "数字フック",
+      "label": "数字フック＋二択",
       "regime": "risk_on",
-      "body": "【明日上がる日本株】\nプライム{universe_size}銘柄スキャン → スコア{score}点\n\n{name}（{ticker_display}）\n\n{reason_1}\n{reason_2}\n{reason_3}\n\nレジーム: リスクオン\n保有想定: {holding_window}\n\n#因果律 #日本株 #クオンツ",
-      "self_reply": "律は毎日数字だけで判断してます。気になる人はフォローしてください。"
+      "body": "20:00更新（{date}）\nレジーム：{regime_label}\n結論：監視｜{name}（{ticker_display}）スコア{score}\n\n{reason_1}\n{reason_2}\n{reason_3}\n\n崩れる条件：{condition_a} / {condition_b}\nどっちを想定？理由も\n\n観測：{watch}\n※監査：gate {gate_status}（IC {wf_ic}）",
+      "self_reply": "反証条件：{condition_b}なら撤退。保有想定{holding_window}。\n完全版（根拠・監査ログ）はプロフィール固定から。"
     },
     "D_warning": {
-      "label": "警告型",
+      "label": "警告型＋監査提示",
       "regime": "risk_off",
-      "body": "【因果律】今日はノートレード。\n\nレジームがリスクオフ。律のルールでは無理に出しません。\n休むのも戦略です。\n\n#因果律 #日本株",
+      "body": "20:00更新（{date}）\nレジーム：{regime_label}\n結論：NO_TRADE\n\n品質ゲート：{fail_reason}\n律のルールでは条件を満たさないとき出しません。\n\n休むのも戦略。この判断、妥当だと思う？\n異論は「出すべき理由」を1つ挙げてください。",
       "self_reply": ""
     },
     "F_provoke": {
-      "label": "挑発型",
+      "label": "反証条件型",
       "regime": "risk_on",
-      "body": "まだ勘で銘柄選んでますか？\n\n律はプライム{universe_size}銘柄を毎日スキャン。\n今日のトップ → {name}（{ticker_display}）スコア{score}\n\n{reason_1}\n{reason_2}\n{reason_3}\n\n感覚より数字。\n\n#因果律 #日本株 #AI投資",
-      "self_reply": "保有想定は{holding_window}。レジームはリスクオン。律のシグナル、毎日出してます。"
+      "body": "20:00更新（{date}）\nレジーム：{regime_label}\n{name}（{ticker_display}）スコア{score}\n\n律の判断が外れる条件：{condition_b}\nこの読みが崩れるなら撤退。\n\n異論歓迎：あなたの撤退条件はどこ？\n\n観測：{watch}\n※監査：gate {gate_status}",
+      "self_reply": "根拠：{reason_1} / {reason_2} / {reason_3}\n保有想定{holding_window}。条件崩れたら撤退です。"
     }
   },
   "selection_rule": {
