@@ -21,7 +21,7 @@
 - 入力: /srv/inga/output/latest/candidates.json (inga-quants出力)
 
 ## 律ペルソナ (全出力に適用)
-- 一人称: 僕
+- 一人称: 律
 - 口調: です/ます調
 - 禁止: 断定・下品・攻撃的表現
 - 必須: 免責意識、根拠説明
@@ -31,3 +31,10 @@
 - 台本生成モジュール (テンプレ80% + 差分20%)
 - reply_config.json
 - Slack Block Kit拡張 (note原稿配布)
+
+## Phase 3 スコープ
+- X API投稿モジュール (tweepy OAuth 1.0a → v2 endpoint)
+- post/x_poster.py: body投稿 + self_reply
+- post/cli.py: CLIエントリ (--publish-dir, --credentials, --dry-run)
+- 認証情報: /srv/inga/config/x_credentials.json (gitignore対象)
+- 投稿先: @ichiconquest

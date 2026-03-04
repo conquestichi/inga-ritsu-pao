@@ -78,4 +78,17 @@ echo "[ritsu-pao] Sending Slack notifications..."
 python3 -m ritsu_pao.notify.cli \
     --publish-dir "$PUBLISH_OUTPUT"
 
+# ── X投稿 (20:00 JST) ──
+X_CREDS="/srv/inga/config/x_credentials.json"
+if [[ -f "$X_CREDS" && "$META_STATUS" == "ok" ]]; then
+    echo "[ritsu-pao] Posting to X..."
+    python3 -m ritsu_pao.post.cli \
+        --publish-dir "$PUBLISH_OUTPUT" \
+        --credentials "$X_CREDS" \
+    && echo "[ritsu-pao] X post complete" \
+    || echo "[ritsu-pao] WARN: X post failed (non-fatal)"
+else
+    echo "[ritsu-pao] Skipping X post (creds=$([[ -f "$X_CREDS" ]] && echo 'found' || echo 'missing'), status=$META_STATUS)"
+fi
+
 echo "[ritsu-pao] Pipeline complete"
