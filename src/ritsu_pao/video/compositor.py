@@ -259,7 +259,6 @@ def compose_shorts_template(
 
 SCROLL_Y = 420  # 字幕Y位置 (中央やや上)
 SCROLL_FONT_SIZE = 110
-SCROLL_SPEED = 338  # px/sec (×1.3)
 SCROLL_BAND_HEIGHT = 144
 
 # ─── 下腹部リロール (常時表示) ───
@@ -329,6 +328,7 @@ def _build_scroll_subtitle(
         escaped = _escape_drawtext(text)
         font_opt = f":fontfile={font_path}" if font_path else ""
         enable = f"between(t\\,{start:.2f}\\,{end:.2f})"
+        scene_dur = end - start
 
         # 半透明帯
         band = (
@@ -339,11 +339,12 @@ def _build_scroll_subtitle(
         )
         filters.append(band)
 
-        # スクロールテキスト: 右端から左へ流れる
+        # スクロール: シーン時間内にテキスト全文が右端→左端を通過
+        # x = w - (w + text_w) * (t - start) / duration
         scroll = (
             f"drawtext=text='{escaped}'"
             f":fontsize={SCROLL_FONT_SIZE}:fontcolor=white"
-            f":x='w-mod((t-{start:.2f})*{SCROLL_SPEED}\\,text_w+w)'"
+            f":x='w-(w+text_w)*(t-{start:.2f})/{scene_dur:.2f}'"
             f":y={SCROLL_Y}"
             f":borderw=2:bordercolor=black"
             f"{font_opt}"
