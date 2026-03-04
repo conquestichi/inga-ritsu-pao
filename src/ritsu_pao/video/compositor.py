@@ -281,6 +281,8 @@ def _scene_to_spoken_text(scene_key: str, script: dict) -> str:
         return script.get("body", "")
     if scene_key == "cta":
         return script.get("cta", "")
+    if scene_key == "reveal":
+        return ""  # reveal scene: text is displayed visually, no scroll subtitle
     if scene_key == "no_trade":
         return script.get("body", "")
     return ""
@@ -427,13 +429,11 @@ def _build_scene_text(
             filters.append(_dt(label, "(w-text_w)/2", 340, 80, color))
 
     elif scene_key == "ticker":
-        ticker = script.get("ticker_display", "")
-        name = script.get("name", "")
-        if ticker or name:
-            filters.append(_dt(f"{ticker}  {name}", "(w-text_w)/2", 160, 114, "white"))
+        # 銘柄はrevealで明かす — tickerシーンではスコアのみ表示
         score = script.get("score")
         if score is not None:
-            filters.append(_dt(f"Score: {score}", "(w-text_w)/2", 270, 88, "#ffd700"))
+            filters.append(_dt(f"Score: {score}", "(w-text_w)/2", 200, 88, "#ffd700"))
+        filters.append(_dt("銘柄名は最後に...", "(w-text_w)/2", 320, 68, "#888888"))
 
     elif scene_key == "reason":
         reasons = script.get("reasons_display", [])
@@ -446,6 +446,17 @@ def _build_scene_text(
 
     elif scene_key == "cta":
         pass  # CTAテキストは音声で読み上げ。免責はプロフィール欄に掲載
+
+    elif scene_key == "reveal":
+        # 黒バックで銘柄名を大きく表示
+        ticker = script.get("ticker_display", "")
+        name = script.get("name", "")
+        if ticker or name:
+            filters.append(_dt(f"{name}", "(w-text_w)/2", 700, 122, "white"))
+            filters.append(_dt(f"{ticker}", "(w-text_w)/2", 860, 88, "#ffd700"))
+        score = script.get("score")
+        if score is not None:
+            filters.append(_dt(f"Score: {score}", "(w-text_w)/2", 980, 72, "#00eeff"))
 
     elif scene_key == "no_trade":
         filters.append(_dt("本日はシグナル見送り", "(w-text_w)/2", 200, 94, "#ff6666"))
@@ -496,6 +507,8 @@ def compose_shorts_scenes(
 
     hook_dur = seg_durations.get("hook", duration * 0.2)
     body_dur = seg_durations.get("body", duration * 0.5)
+    cta_dur = seg_durations.get("cta", duration * 0.2)
+    reveal_dur = seg_durations.get("reveal", 0.0)
 
     is_trade = script.get("status", "trade") == "trade"
 
@@ -506,16 +519,22 @@ def compose_shorts_scenes(
         scenes.append(("title_card", 0.0, tc_dur))
 
     if is_trade:
-        scenes.extend([
-            ("intro", tc_dur, tc_dur + hook_dur),
-            ("ticker", tc_dur + hook_dur, tc_dur + hook_dur + body_dur * 0.5),
-            ("reason", tc_dur + hook_dur + body_dur * 0.5, tc_dur + hook_dur + body_dur),
-            ("cta", tc_dur + hook_dur + body_dur, tc_dur + duration + 0.5),
-        ])
+        t = tc_dur
+        scenes.append(("intro", t, t + hook_dur))
+        t += hook_dur
+        scenes.append(("reason", t, t + body_dur))
+        t += body_dur
+        scenes.append(("cta", t, t + cta_dur))
+        t += cta_dur
+        if reveal_dur > 0:
+            scenes.append(("reveal", t, t + reveal_dur + 1.0))
+            t += reveal_dur + 1.0
+        else:
+            t += 0.5
     else:
         scenes.append(("no_trade", tc_dur, tc_dur + duration + 0.5))
 
-    total_duration = tc_dur + duration + 0.5
+    total_duration = scenes[-1][2] if scenes else tc_dur + duration + 0.5
 
     # ffmpegコマンド組立
     inputs: list[str] = []
@@ -533,10 +552,23 @@ def compose_shorts_scenes(
         filter_parts.append(f"[{input_idx}:v]setsar=1[bg_title_card]")
         input_idx += 1
 
+    # リビールシーン背景 (黒色lavfi)
+    reveal_bg_idx = None
+    reveal_scene = [s for s in scenes if s[0] == "reveal"]
+    if reveal_scene:
+        reveal_dur_sec = reveal_scene[0][2] - reveal_scene[0][1]
+        inputs.extend([
+            "-f", "lavfi", "-i",
+            f"color=c=black:s={w}x{h}:d={reveal_dur_sec:.2f}:r=30",
+        ])
+        reveal_bg_idx = input_idx
+        filter_parts.append(f"[{input_idx}:v]setsar=1[bg_reveal]")
+        input_idx += 1
+
     # 背景画像を入力として追加
     bg_indices: dict[str, int] = {}
     for scene_key, _, _ in scenes:
-        if scene_key == "title_card" or scene_key in bg_indices:
+        if scene_key in ("title_card", "reveal") or scene_key in bg_indices:
             continue
         bg_path = scene_backgrounds.get(scene_key)
         if bg_path and bg_path.exists():
@@ -556,6 +588,12 @@ def compose_shorts_scenes(
             label = "scene_title_card"
             filter_parts.append(
                 f"[bg_title_card]trim=duration={scene_dur:.2f},setpts=PTS-STARTPTS[{label}]"
+            )
+            concat_inputs.append(f"[{label}]")
+        elif scene_key == "reveal" and reveal_bg_idx is not None:
+            label = "scene_reveal"
+            filter_parts.append(
+                f"[bg_reveal]trim=duration={scene_dur:.2f},setpts=PTS-STARTPTS[{label}]"
             )
             concat_inputs.append(f"[{label}]")
         elif scene_key in bg_indices:

@@ -11,23 +11,26 @@
     "A_number_hook": {
       "label": "数字フック",
       "regime": "risk_on",
-      "hook": "学習AI、因果quantsが{universe_size}銘柄をスキャンして、スコア{score}点。ダントツ1位です。",
-      "body": "{name}、{ticker_display}。レジームはリスクオン。根拠は3つ。1つ目、{reason_1}。2つ目、{reason_2}。3つ目、{reason_3}。保有想定は{holding_window}。予測精度は{ic_display}です。",
-      "cta": "律の見立てが崩れる条件は、{condition_b}。この銘柄どう見るか、コメントで教えてください。"
+      "hook": "学習AI、因果quantsが{universe_size}銘柄をスキャンして、スコア{score}点。ダントツ1位。銘柄名は、最後に明かします。",
+      "body": "根拠は3つ。1つ目、{reason_1}。2つ目、{reason_2}。3つ目、{reason_3}。保有想定は{holding_window}。予測精度は{ic_display}です。",
+      "cta": "律の見立てが崩れる条件は、{condition_b}。この銘柄どう見るか、コメントで教えてください。",
+      "reveal": "銘柄は、{name}。{ticker_display}です。"
     },
     "D_warning": {
       "label": "警告型",
       "regime": "risk_off",
       "hook": "今日は、出しません。",
       "body": "レジームがリスクオフです。因果quantsの品質ゲートが通ってないので、今日はノートレード。理由は、{fail_reason}。予測精度は{ic_display}。自信がないときは出さない。それが律のルールです。",
-      "cta": "この見送り判断、妥当だと思いますか？コメントで教えてください。"
+      "cta": "この見送り判断、妥当だと思いますか？コメントで教えてください。",
+      "reveal": ""
     },
     "F_provoke": {
       "label": "反証条件型",
       "regime": "risk_on",
       "hook": "まだ自分の勘で銘柄選んでますか？",
-      "body": "因果quantsは毎日{universe_size}銘柄を学習して、数字だけで判断してます。今日のトップは{name}、{ticker_display}。スコア{score}。{reason_1}。{reason_2}。{reason_3}。3つの根拠が全部揃ってます。レジームはリスクオン。保有想定は{holding_window}。",
-      "cta": "律が考える外れ条件は、{condition_b}。あなたならどこで撤退するか、コメントで1つ教えてください。"
+      "body": "因果quantsは毎日{universe_size}銘柄を学習して、数字だけで判断してます。今日のスコアは{score}。{reason_1}。{reason_2}。{reason_3}。3つの根拠が全部揃ってます。レジームはリスクオン。保有想定は{holding_window}。",
+      "cta": "律が考える外れ条件は、{condition_b}。あなたならどこで撤退するか、コメントで1つ教えてください。",
+      "reveal": "銘柄は、{name}。{ticker_display}です。"
     }
   },
   "selection_rule": {

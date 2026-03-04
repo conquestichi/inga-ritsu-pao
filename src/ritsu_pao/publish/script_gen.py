@@ -291,6 +291,7 @@ def generate_script_youtube(
         hook = _fill(pattern["hook"], ctx)
         body = _fill(pattern["body"], ctx)
         cta = _fill(pattern["cta"], ctx)
+        reveal = _fill(pattern.get("reveal", ""), ctx)
         status = "trade"
 
         upload_meta_tmpl = tmpl.get("upload_meta", {})
@@ -306,6 +307,7 @@ def generate_script_youtube(
         hook = _fill(pattern["hook"], ctx)
         body = _fill(pattern["body"], ctx)
         cta = _fill(pattern["cta"], ctx)
+        reveal = _fill(pattern.get("reveal", ""), ctx)
         status = "no_trade"
         upload_meta = {}
 
@@ -315,6 +317,7 @@ def generate_script_youtube(
         hook=hook,
         body=body,
         cta=cta,
+        reveal=reveal,
         title_card=title_card,
         voicepeak=tmpl.get("voicepeak", {}),
         upload_meta=upload_meta,

@@ -84,7 +84,7 @@ def generate_audio_from_script(
     output_dir.mkdir(parents=True, exist_ok=True)
     result: dict[str, Path] = {}
 
-    for key in ["hook", "body", "cta"]:
+    for key in ["hook", "body", "cta", "reveal"]:
         text = script_youtube.get(key, "")
         if not text.strip():
             continue
@@ -93,7 +93,7 @@ def generate_audio_from_script(
         result[key] = wav_path
 
     full_text = " ".join(
-        script_youtube.get(k, "") for k in ["hook", "body", "cta"]
+        script_youtube.get(k, "") for k in ["hook", "body", "cta", "reveal"]
         if script_youtube.get(k)
     )
     if full_text.strip():

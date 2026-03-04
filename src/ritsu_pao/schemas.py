@@ -88,6 +88,7 @@ class ScriptYoutubeJson(BaseModel):
     hook: str
     body: str
     cta: str
+    reveal: str = ""
     title_card: dict[str, Any] = Field(default_factory=dict)
     voicepeak: dict[str, Any] = Field(default_factory=dict)
     upload_meta: dict[str, Any] = Field(default_factory=dict)
