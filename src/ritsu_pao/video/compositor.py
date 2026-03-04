@@ -260,7 +260,7 @@ def compose_shorts_template(
 SUBTITLE_Y = 420  # 字幕Y位置 (中央やや上)
 SUBTITLE_FONT_SIZE = 56
 SUBTITLE_BAND_HEIGHT = 80
-SUBTITLE_SPEED = 120  # px/sec (ゆっくり)
+SUBTITLE_SPEED = 300  # px/sec
 
 # ─── 下腹部リロール (常時表示) ───
 
