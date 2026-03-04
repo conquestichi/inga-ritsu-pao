@@ -255,19 +255,35 @@ def compose_shorts_template(
 # ── シーン切替モード (背景画像複数枚) ──
 
 
-# ─── スクロール字幕 (台詞) ───
+# ─── カラオケ式字幕 (台詞) ───
 
-SCROLL_Y = 420  # 字幕Y位置 (中央やや上)
-SCROLL_FONT_SIZE = 110
-SCROLL_BAND_HEIGHT = 144
+SUBTITLE_Y = 420  # 字幕Y位置 (中央やや上)
+SUBTITLE_FONT_SIZE = 110
+SUBTITLE_BAND_HEIGHT = 144
+SUBTITLE_FADE_SEC = 0.3  # フェードイン時間
 
 # ─── 下腹部リロール (常時表示) ───
 
 TICKER_TEXT = "AI  quants  因果律  学習システム  24時間稼働中  短期日本株  未来予測中  "
 TICKER_Y_OFFSET = 160  # 画面下端からのオフセット
 TICKER_FONT_SIZE = 52
-TICKER_SPEED = 169  # px/sec (×1.3)
+TICKER_SPEED = 169  # px/sec
 TICKER_BAND_HEIGHT = 78
+
+
+def _split_phrases(text: str) -> list[str]:
+    """句読点でフレーズ分割 (カラオケ用)"""
+    import re
+    parts = re.split(r"(?<=[。、．，！？\n])", text)
+    phrases = [p.strip() for p in parts if p.strip()]
+    # 短すぎるフレーズは前と結合
+    merged: list[str] = []
+    for p in phrases:
+        if merged and len(merged[-1]) < 6:
+            merged[-1] += p
+        else:
+            merged.append(p)
+    return merged if merged else [text]
 
 
 def _scene_to_spoken_text(scene_key: str, script: dict) -> str:
@@ -285,12 +301,15 @@ def _scene_to_spoken_text(scene_key: str, script: dict) -> str:
     return ""
 
 
-def _build_scroll_subtitle(
+def _build_karaoke_subtitle(
     scenes: list[tuple[str, float, float]],
     script: dict,
     font_path: str | None,
 ) -> list[str]:
-    """全シーン分のスクロール字幕フィルタを生成"""
+    """全シーン分のカラオケ式字幕フィルタを生成
+
+    フレーズが順にフェードインし、シーン内に蓄積表示される。
+    """
     filters: list[str] = []
     seen_texts: set[str] = set()
 
@@ -299,11 +318,9 @@ def _build_scroll_subtitle(
         if not text:
             continue
 
-        # 同じテキスト（body）が ticker/reason で重複する場合、
-        # ticker: 前半、reason: 後半に分割
+        # body が ticker/reason で重複する場合は前半/後半に分割
         if scene_key == "ticker" and text == script.get("body", ""):
             mid = len(text) // 2
-            # 文の切れ目で分割
             cut = text.rfind("。", 0, mid + 10)
             if cut == -1:
                 cut = text.rfind("、", 0, mid + 10)
@@ -319,38 +336,50 @@ def _build_scroll_subtitle(
                 cut = mid
             text = text[cut + 1 :]
 
-        # 重複テキスト完全一致はスキップ（ただしscene範囲が違うのでenable別）
         text_key = f"{scene_key}:{text}"
         if text_key in seen_texts:
             continue
         seen_texts.add(text_key)
 
-        escaped = _escape_drawtext(text)
-        font_opt = f":fontfile={font_path}" if font_path else ""
-        enable = f"between(t\\,{start:.2f}\\,{end:.2f})"
         scene_dur = end - start
+        enable_scene = f"between(t\\,{start:.2f}\\,{end:.2f})"
 
-        # 半透明帯
+        # 半透明帯 (シーン中常時表示)
         band = (
-            f"drawbox=x=0:y={SCROLL_Y - 10}"
-            f":w=iw:h={SCROLL_BAND_HEIGHT}"
+            f"drawbox=x=0:y={SUBTITLE_Y - 10}"
+            f":w=iw:h={SUBTITLE_BAND_HEIGHT}"
             f":color=black@0.5:t=fill"
-            f":enable='{enable}'"
+            f":enable='{enable_scene}'"
         )
         filters.append(band)
 
-        # スクロール: シーン時間内にテキスト全文が右端→左端を通過
-        # x = w - (w + text_w) * (t - start) / duration
-        scroll = (
-            f"drawtext=text='{escaped}'"
-            f":fontsize={SCROLL_FONT_SIZE}:fontcolor=white"
-            f":x='w-(w+text_w)*(t-{start:.2f})/{scene_dur:.2f}'"
-            f":y={SCROLL_Y}"
-            f":borderw=2:bordercolor=black"
-            f"{font_opt}"
-            f":enable='{enable}'"
-        )
-        filters.append(scroll)
+        # フレーズ分割 → 順番にフェードイン
+        phrases = _split_phrases(text)
+        n = len(phrases)
+        interval = scene_dur / n if n > 0 else scene_dur
+
+        for i, phrase in enumerate(phrases):
+            phrase_start = start + i * interval
+            escaped = _escape_drawtext(phrase)
+            font_opt = f":fontfile={font_path}" if font_path else ""
+
+            # フェードイン: alpha 0→1 over SUBTITLE_FADE_SEC, then stay
+            enable_phrase = f"gte(t\\,{phrase_start:.2f})*lte(t\\,{end:.2f})"
+            alpha = (
+                f"if(lt(t-{phrase_start:.2f}\\,{SUBTITLE_FADE_SEC})"
+                f"\\,(t-{phrase_start:.2f})/{SUBTITLE_FADE_SEC}\\,1)"
+            )
+
+            dt = (
+                f"drawtext=text='{escaped}'"
+                f":fontsize={SUBTITLE_FONT_SIZE}:fontcolor=white"
+                f":x=(w-text_w)/2:y={SUBTITLE_Y + 4}"
+                f":borderw=2:bordercolor=black"
+                f":alpha='{alpha}'"
+                f"{font_opt}"
+                f":enable='{enable_phrase}'"
+            )
+            filters.append(dt)
 
     return filters
 
@@ -635,11 +664,11 @@ def compose_shorts_scenes(
         filter_parts.append(f"[{current_layer}]{text_chain}[with_text]")
         current_layer = "with_text"
 
-    # スクロール字幕
-    scroll_filters = _build_scroll_subtitle(scenes, script, font_path)
-    if scroll_filters:
-        scroll_chain = ",".join(scroll_filters)
-        filter_parts.append(f"[{current_layer}]{scroll_chain}[with_scroll]")
+    # カラオケ式字幕
+    karaoke_filters = _build_karaoke_subtitle(scenes, script, font_path)
+    if karaoke_filters:
+        karaoke_chain = ",".join(karaoke_filters)
+        filter_parts.append(f"[{current_layer}]{karaoke_chain}[with_scroll]")
         current_layer = "with_scroll"
 
     # 下腹部リロール (右スクロール、常時表示)
