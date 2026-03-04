@@ -255,12 +255,20 @@ def compose_shorts_template(
 # ── シーン切替モード (背景画像複数枚) ──
 
 
-# ─── スクロール字幕 ───
+# ─── スクロール字幕 (台詞) ───
 
-SCROLL_Y = 440  # 字幕Y位置 (キャラクター上部)
-SCROLL_FONT_SIZE = 38
-SCROLL_SPEED = 180  # px/sec (読みやすい速度)
-SCROLL_BAND_HEIGHT = 60
+SCROLL_Y = 420  # 字幕Y位置 (中央やや上)
+SCROLL_FONT_SIZE = 64
+SCROLL_SPEED = 200  # px/sec
+SCROLL_BAND_HEIGHT = 90
+
+# ─── 下腹部リロール (常時表示) ───
+
+TICKER_TEXT = "AI  quants  因果律  学習システム  24時間稼働中  短期日本株  未来予測中  "
+TICKER_Y_OFFSET = 160  # 画面下端からのオフセット
+TICKER_FONT_SIZE = 30
+TICKER_SPEED = 100  # px/sec (ゆっくり右→左と逆方向)
+TICKER_BAND_HEIGHT = 48
 
 
 def _scene_to_spoken_text(scene_key: str, script: dict) -> str:
@@ -342,6 +350,39 @@ def _build_scroll_subtitle(
             f":enable='{enable}'"
         )
         filters.append(scroll)
+
+    return filters
+
+
+def _build_bottom_ticker(
+    font_path: str | None,
+    total_duration: float,
+) -> list[str]:
+    """画面下部の右スクロールリロール (常時表示)"""
+    h = SHORTS_HEIGHT
+    y = h - TICKER_Y_OFFSET
+    escaped = _escape_drawtext(TICKER_TEXT * 3)  # 3回繰り返してループ感
+    font_opt = f":fontfile={font_path}" if font_path else ""
+
+    filters = []
+    # 半透明帯
+    band = (
+        f"drawbox=x=0:y={y - 8}"
+        f":w=iw:h={TICKER_BAND_HEIGHT}"
+        f":color=black@0.4:t=fill"
+    )
+    filters.append(band)
+
+    # 右スクロール: 左端から入って右端へ出る
+    scroll = (
+        f"drawtext=text='{escaped}'"
+        f":fontsize={TICKER_FONT_SIZE}:fontcolor=#88ccff"
+        f":x='mod(t*{TICKER_SPEED}\\,text_w+w)-text_w'"
+        f":y={y}"
+        f":borderw=1:bordercolor=black@0.6"
+        f"{font_opt}"
+    )
+    filters.append(scroll)
 
     return filters
 
@@ -599,6 +640,13 @@ def compose_shorts_scenes(
         scroll_chain = ",".join(scroll_filters)
         filter_parts.append(f"[{current_layer}]{scroll_chain}[with_scroll]")
         current_layer = "with_scroll"
+
+    # 下腹部リロール (右スクロール、常時表示)
+    ticker_filters = _build_bottom_ticker(font_path, total_duration)
+    if ticker_filters:
+        ticker_chain = ",".join(ticker_filters)
+        filter_parts.append(f"[{current_layer}]{ticker_chain}[with_ticker]")
+        current_layer = "with_ticker"
 
     # 最終レイヤー確定 (免責テロップは動画外 — プロフィール欄に掲載)
     filter_parts.append(f"[{current_layer}]null[final]")
