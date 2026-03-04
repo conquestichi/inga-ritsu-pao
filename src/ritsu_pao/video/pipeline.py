@@ -124,6 +124,7 @@ def run_video_pipeline(
             character_clip=character_clip,
             bgm_path=bgm_path,
             font_path=font_path,
+            title_card=script.get("title_card"),
         )
     else:
         # Mode 3: フォールバック
