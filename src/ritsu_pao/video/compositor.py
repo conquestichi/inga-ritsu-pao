@@ -255,12 +255,12 @@ def compose_shorts_template(
 # ── シーン切替モード (背景画像複数枚) ──
 
 
-# ─── カラオケ式字幕 (台詞) ───
+# ─── 固定字幕 (シーンごと切替) ───
 
 SUBTITLE_Y = 420  # 字幕Y位置 (中央やや上)
-SUBTITLE_FONT_SIZE = 110
+SUBTITLE_FONT_SIZE = 56
 SUBTITLE_BAND_HEIGHT = 144
-SUBTITLE_FADE_SEC = 0.3  # フェードイン時間
+SUBTITLE_MAX_CHARS = 20  # 1行最大文字数
 
 # ─── 下腹部リロール (常時表示) ───
 
@@ -269,21 +269,6 @@ TICKER_Y_OFFSET = 160  # 画面下端からのオフセット
 TICKER_FONT_SIZE = 52
 TICKER_SPEED = 169  # px/sec
 TICKER_BAND_HEIGHT = 78
-
-
-def _split_phrases(text: str) -> list[str]:
-    """句読点でフレーズ分割 (カラオケ用)"""
-    import re
-    parts = re.split(r"(?<=[。、．，！？\n])", text)
-    phrases = [p.strip() for p in parts if p.strip()]
-    # 短すぎるフレーズは前と結合
-    merged: list[str] = []
-    for p in phrases:
-        if merged and len(merged[-1]) < 6:
-            merged[-1] += p
-        else:
-            merged.append(p)
-    return merged if merged else [text]
 
 
 def _scene_to_spoken_text(scene_key: str, script: dict) -> str:
@@ -301,15 +286,41 @@ def _scene_to_spoken_text(scene_key: str, script: dict) -> str:
     return ""
 
 
-def _build_karaoke_subtitle(
+def _wrap_lines(text: str, max_chars: int = SUBTITLE_MAX_CHARS) -> list[str]:
+    """長いテキストを句読点 or max_chars で複数行に分割"""
+    import re
+    # 句読点で分割
+    parts = re.split(r"(?<=[。、．，])", text)
+    lines: list[str] = []
+    current = ""
+    for part in parts:
+        part = part.strip()
+        if not part:
+            continue
+        if current and len(current + part) > max_chars:
+            lines.append(current)
+            current = part
+        else:
+            current += part
+    if current:
+        lines.append(current)
+    # max_chars超えの行をさらに折り返し
+    result: list[str] = []
+    for line in lines:
+        while len(line) > max_chars:
+            result.append(line[:max_chars])
+            line = line[max_chars:]
+        if line:
+            result.append(line)
+    return result[:3]  # 最大3行
+
+
+def _build_fixed_subtitle(
     scenes: list[tuple[str, float, float]],
     script: dict,
     font_path: str | None,
 ) -> list[str]:
-    """全シーン分のカラオケ式字幕フィルタを生成
-
-    フレーズが順にフェードインし、シーン内に蓄積表示される。
-    """
+    """シーンごとに固定字幕を表示（切替式）"""
     filters: list[str] = []
     seen_texts: set[str] = set()
 
@@ -341,43 +352,31 @@ def _build_karaoke_subtitle(
             continue
         seen_texts.add(text_key)
 
-        scene_dur = end - start
-        enable_scene = f"between(t\\,{start:.2f}\\,{end:.2f})"
+        enable = f"between(t\\,{start:.2f}\\,{end:.2f})"
+        font_opt = f":fontfile={font_path}" if font_path else ""
 
-        # 半透明帯 (シーン中常時表示)
+        # 半透明帯
         band = (
             f"drawbox=x=0:y={SUBTITLE_Y - 10}"
             f":w=iw:h={SUBTITLE_BAND_HEIGHT}"
             f":color=black@0.5:t=fill"
-            f":enable='{enable_scene}'"
+            f":enable='{enable}'"
         )
         filters.append(band)
 
-        # フレーズ分割 → 順番にフェードイン
-        phrases = _split_phrases(text)
-        n = len(phrases)
-        interval = scene_dur / n if n > 0 else scene_dur
-
-        for i, phrase in enumerate(phrases):
-            phrase_start = start + i * interval
-            escaped = _escape_drawtext(phrase)
-            font_opt = f":fontfile={font_path}" if font_path else ""
-
-            # フェードイン: alpha 0→1 over SUBTITLE_FADE_SEC, then stay
-            enable_phrase = f"gte(t\\,{phrase_start:.2f})*lte(t\\,{end:.2f})"
-            alpha = (
-                f"if(lt(t-{phrase_start:.2f}\\,{SUBTITLE_FADE_SEC})"
-                f"\\,(t-{phrase_start:.2f})/{SUBTITLE_FADE_SEC}\\,1)"
-            )
-
+        # 行分割して中央寄せ固定表示
+        lines = _wrap_lines(text)
+        line_height = SUBTITLE_FONT_SIZE + 12
+        for i, line in enumerate(lines):
+            escaped = _escape_drawtext(line)
+            y = SUBTITLE_Y + 4 + i * line_height
             dt = (
                 f"drawtext=text='{escaped}'"
                 f":fontsize={SUBTITLE_FONT_SIZE}:fontcolor=white"
-                f":x=(w-text_w)/2:y={SUBTITLE_Y + 4}"
+                f":x=(w-text_w)/2:y={y}"
                 f":borderw=2:bordercolor=black"
-                f":alpha='{alpha}'"
                 f"{font_opt}"
-                f":enable='{enable_phrase}'"
+                f":enable='{enable}'"
             )
             filters.append(dt)
 
@@ -664,11 +663,11 @@ def compose_shorts_scenes(
         filter_parts.append(f"[{current_layer}]{text_chain}[with_text]")
         current_layer = "with_text"
 
-    # カラオケ式字幕
-    karaoke_filters = _build_karaoke_subtitle(scenes, script, font_path)
-    if karaoke_filters:
-        karaoke_chain = ",".join(karaoke_filters)
-        filter_parts.append(f"[{current_layer}]{karaoke_chain}[with_scroll]")
+    # 固定字幕 (シーンごと切替)
+    sub_filters = _build_fixed_subtitle(scenes, script, font_path)
+    if sub_filters:
+        sub_chain = ",".join(sub_filters)
+        filter_parts.append(f"[{current_layer}]{sub_chain}[with_scroll]")
         current_layer = "with_scroll"
 
     # 下腹部リロール (右スクロール、常時表示)
