@@ -78,6 +78,16 @@ echo "[ritsu-pao] Sending Slack notifications..."
 python3 -m ritsu_pao.notify.cli \
     --publish-dir "$PUBLISH_OUTPUT"
 
+# ── 投稿タイミング待機 (20:00 JST) ──
+TARGET_HOUR=20
+CURRENT_HOUR=$(TZ=Asia/Tokyo date +%H)
+CURRENT_MIN=$(TZ=Asia/Tokyo date +%M)
+if [[ "$CURRENT_HOUR" -lt "$TARGET_HOUR" ]]; then
+    WAIT_SEC=$(( (TARGET_HOUR - CURRENT_HOUR) * 3600 - CURRENT_MIN * 60 ))
+    echo "[ritsu-pao] Waiting ${WAIT_SEC}s until 20:00 JST for posting..."
+    sleep "$WAIT_SEC"
+fi
+
 # ── X投稿 (20:00 JST) ──
 X_CREDS="/srv/inga/config/x_credentials.json"
 if [[ -f "$X_CREDS" && "$META_STATUS" == "ok" ]]; then

@@ -35,6 +35,12 @@
 ## Phase 3 スコープ
 - X API投稿モジュール (tweepy OAuth 1.0a → v2 endpoint)
 - post/x_poster.py: body投稿 + self_reply
-- post/cli.py: CLIエントリ (--publish-dir, --credentials, --dry-run)
+- post/cli.py: CLIエントリ (x / youtube サブコマンド, --dry-run)
 - 認証情報: /srv/inga/config/x_credentials.json (gitignore対象)
 - 投稿先: @ichiconquest
+
+## Phase 4 スコープ
+- YouTube Data API v3 アップロードモジュール
+- post/youtube_uploader.py: OAuth2 refresh_token + resumable upload
+- 認証情報: /srv/inga/config/client_secret.json, youtube_token.json
+- run_daily.sh: 19:00 publish/動画生成 → 20:00 X/YouTube投稿

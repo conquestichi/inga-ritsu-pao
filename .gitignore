@@ -10,3 +10,9 @@ build/
 .ruff_cache/
 *.log
 output/
+
+# credentials (safety)
+*credentials*.json
+*client_secret*.json
+*token*.json
+*.pem

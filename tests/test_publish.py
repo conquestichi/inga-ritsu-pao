@@ -173,3 +173,58 @@ class TestPublisher:
         output_dir = tmp_path / "publish"
         result = publish(cand_path, gates_path, output_dir, tmp_config)
         assert "script_x" in result
+
+
+class TestEdgeCases:
+    """エッジケースの回帰テスト"""
+
+    def test_reason_less_than_3_no_raw_placeholder(
+        self, sample_candidates_data, sample_gates_passed, tmp_config
+    ):
+        """reason_top3が3つ未満でも{reason_N}がリテラル出力されない"""
+        from ritsu_pao.publish.script_gen import generate_script_x
+
+        cand = CandidatesJson(**sample_candidates_data)
+        cand.candidates[0].reasons_top3 = cand.candidates[0].reasons_top3[:1]
+        gates = GatesResult(**sample_gates_passed)
+        top1 = cand.candidates[0]
+        script = generate_script_x(cand, gates, top1, config_dir=tmp_config)
+        assert "{reason_" not in script.body
+        assert "・\n・" not in script.body
+
+    def test_wf_ic_none_no_double_newline(
+        self, sample_candidates_data, tmp_config
+    ):
+        """wf_ic=Noneでも三連空行が出ない"""
+        from ritsu_pao.publish.script_gen import generate_script_x
+
+        cand = CandidatesJson(**sample_candidates_data)
+        gates = GatesResult(all_passed=True, regime="risk_on")
+        top1 = cand.candidates[0]
+        script = generate_script_x(cand, gates, top1, config_dir=tmp_config)
+        assert "\n\n\n" not in script.body
+
+    def test_trailing_separator_cleaned(
+        self, sample_candidates_data, tmp_config
+    ):
+        """ic_display空のとき末尾に｜が残らない"""
+        from ritsu_pao.publish.script_gen import generate_script_x
+
+        cand = CandidatesJson(**sample_candidates_data)
+        gates = GatesResult(all_passed=True, regime="risk_on")
+        top1 = cand.candidates[0]
+        script = generate_script_x(cand, gates, top1, config_dir=tmp_config)
+        for line in script.body.split("\n"):
+            assert not line.rstrip().endswith("｜"), f"末尾｜: {line!r}"
+
+    def test_x_body_under_280_chars(
+        self, sample_candidates_data, sample_gates_passed, tmp_config
+    ):
+        """X投稿本文が280文字以内"""
+        from ritsu_pao.publish.script_gen import generate_script_x
+
+        cand = CandidatesJson(**sample_candidates_data)
+        gates = GatesResult(**sample_gates_passed)
+        top1 = cand.candidates[0]
+        script = generate_script_x(cand, gates, top1, config_dir=tmp_config)
+        assert len(script.body) <= 280, f"X body too long: {len(script.body)} chars"

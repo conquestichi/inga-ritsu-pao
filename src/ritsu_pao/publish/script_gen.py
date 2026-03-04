@@ -71,11 +71,21 @@ def _load_json(path: Path) -> dict[str, Any]:
 
 
 def _fill(template: str, ctx: dict[str, Any]) -> str:
-    """テンプレートにコンテキスト変数を注入"""
+    """テンプレートにコンテキスト変数を注入 + 空行・空弾丸の後処理"""
     result = template
     for key, val in ctx.items():
         result = result.replace(f"{{{key}}}", str(val))
-    return result
+    # 後処理: 空の弾丸行を除去（「・」だけの行）
+    lines = result.split("\n")
+    lines = [ln for ln in lines if ln.strip() not in ("・", "・ ", "・  ")]
+    result = "\n".join(lines)
+    # 連続空行を1つに圧縮
+    while "\n\n\n" in result:
+        result = result.replace("\n\n\n", "\n\n")
+    # 末尾セパレータ（｜）の除去
+    lines = result.split("\n")
+    lines = [ln.rstrip("｜").rstrip() for ln in lines]
+    return "\n".join(lines).strip()
 
 
 def _select_pattern(
@@ -154,9 +164,6 @@ def _build_context(
         ctx["rejection_reasons"] = ""
         ctx["fail_reason"] = "なし"
 
-    # WF IC
-    ctx["wf_ic"] = f"{gates.wf_ic:.3f}" if gates.wf_ic is not None else "N/A"
-
     if candidate:
         ctx.update(
             {
@@ -170,8 +177,13 @@ def _build_context(
                 "risk_flags": format_risk_flags(candidate.risk_flags),
             }
         )
-        for i, r in enumerate(candidate.reasons_top3[:3]):
-            ctx[f"reason_{i + 1}"] = _simplify_reason(r.note, r.feature, r.direction)
+        # reason_1/2/3（3つ未満の場合はデフォルト値）
+        for i in range(3):
+            if i < len(candidate.reasons_top3):
+                r = candidate.reasons_top3[i]
+                ctx[f"reason_{i + 1}"] = _simplify_reason(r.note, r.feature, r.direction)
+            else:
+                ctx[f"reason_{i + 1}"] = ""
 
         # 反証条件・観測指標（トップ理由から生成）
         top = candidate.reasons_top3[0] if candidate.reasons_top3 else None
