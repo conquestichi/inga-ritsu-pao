@@ -255,6 +255,97 @@ def compose_shorts_template(
 # ── シーン切替モード (背景画像複数枚) ──
 
 
+# ─── スクロール字幕 ───
+
+SCROLL_Y = 440  # 字幕Y位置 (キャラクター上部)
+SCROLL_FONT_SIZE = 38
+SCROLL_SPEED = 180  # px/sec (読みやすい速度)
+SCROLL_BAND_HEIGHT = 60
+
+
+def _scene_to_spoken_text(scene_key: str, script: dict) -> str:
+    """シーンキーから読み上げテキストを取得"""
+    if scene_key == "title_card":
+        return ""
+    if scene_key == "intro":
+        return script.get("hook", "")
+    if scene_key in ("ticker", "reason"):
+        return script.get("body", "")
+    if scene_key == "cta":
+        return script.get("cta", "")
+    if scene_key == "no_trade":
+        return script.get("body", "")
+    return ""
+
+
+def _build_scroll_subtitle(
+    scenes: list[tuple[str, float, float]],
+    script: dict,
+    font_path: str | None,
+) -> list[str]:
+    """全シーン分のスクロール字幕フィルタを生成"""
+    filters: list[str] = []
+    seen_texts: set[str] = set()
+
+    for scene_key, start, end in scenes:
+        text = _scene_to_spoken_text(scene_key, script)
+        if not text:
+            continue
+
+        # 同じテキスト（body）が ticker/reason で重複する場合、
+        # ticker: 前半、reason: 後半に分割
+        if scene_key == "ticker" and text == script.get("body", ""):
+            mid = len(text) // 2
+            # 文の切れ目で分割
+            cut = text.rfind("。", 0, mid + 10)
+            if cut == -1:
+                cut = text.rfind("、", 0, mid + 10)
+            if cut == -1:
+                cut = mid
+            text = text[: cut + 1]
+        elif scene_key == "reason" and text == script.get("body", ""):
+            mid = len(text) // 2
+            cut = text.rfind("。", 0, mid + 10)
+            if cut == -1:
+                cut = text.rfind("、", 0, mid + 10)
+            if cut == -1:
+                cut = mid
+            text = text[cut + 1 :]
+
+        # 重複テキスト完全一致はスキップ（ただしscene範囲が違うのでenable別）
+        text_key = f"{scene_key}:{text}"
+        if text_key in seen_texts:
+            continue
+        seen_texts.add(text_key)
+
+        escaped = _escape_drawtext(text)
+        font_opt = f":fontfile={font_path}" if font_path else ""
+        enable = f"between(t\\,{start:.2f}\\,{end:.2f})"
+
+        # 半透明帯
+        band = (
+            f"drawbox=x=0:y={SCROLL_Y - 10}"
+            f":w=iw:h={SCROLL_BAND_HEIGHT}"
+            f":color=black@0.5:t=fill"
+            f":enable='{enable}'"
+        )
+        filters.append(band)
+
+        # スクロールテキスト: 右端から左へ流れる
+        scroll = (
+            f"drawtext=text='{escaped}'"
+            f":fontsize={SCROLL_FONT_SIZE}:fontcolor=white"
+            f":x='w-mod((t-{start:.2f})*{SCROLL_SPEED}\\,text_w+w)'"
+            f":y={SCROLL_Y}"
+            f":borderw=2:bordercolor=black"
+            f"{font_opt}"
+            f":enable='{enable}'"
+        )
+        filters.append(scroll)
+
+    return filters
+
+
 def _build_scene_text(
     scene_key: str,
     script: dict,
@@ -501,6 +592,13 @@ def compose_shorts_scenes(
         text_chain = ",".join(all_text_filters)
         filter_parts.append(f"[{current_layer}]{text_chain}[with_text]")
         current_layer = "with_text"
+
+    # スクロール字幕
+    scroll_filters = _build_scroll_subtitle(scenes, script, font_path)
+    if scroll_filters:
+        scroll_chain = ",".join(scroll_filters)
+        filter_parts.append(f"[{current_layer}]{scroll_chain}[with_scroll]")
+        current_layer = "with_scroll"
 
     # 最終レイヤー確定 (免責テロップは動画外 — プロフィール欄に掲載)
     filter_parts.append(f"[{current_layer}]null[final]")
