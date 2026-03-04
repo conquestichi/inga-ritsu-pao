@@ -273,16 +273,14 @@ TICKER_BAND_HEIGHT = 78
 
 def _scene_to_spoken_text(scene_key: str, script: dict) -> str:
     """シーンキーから読み上げテキストを取得"""
-    if scene_key == "title_card":
-        return ""
+    if scene_key in ("title_card", "reveal"):
+        return ""  # 無音シーン
     if scene_key == "intro":
         return script.get("hook", "")
-    if scene_key in ("ticker", "reason"):
+    if scene_key == "reason":
         return script.get("body", "")
     if scene_key == "cta":
         return script.get("cta", "")
-    if scene_key == "reveal":
-        return ""  # reveal scene: text is displayed visually, no scroll subtitle
     if scene_key == "no_trade":
         return script.get("body", "")
     return ""
@@ -301,24 +299,6 @@ def _build_scroll_subtitle(
         text = _scene_to_spoken_text(scene_key, script)
         if not text:
             continue
-
-        # body が ticker/reason で重複する場合は前半/後半に分割
-        if scene_key == "ticker" and text == script.get("body", ""):
-            mid = len(text) // 2
-            cut = text.rfind("。", 0, mid + 10)
-            if cut == -1:
-                cut = text.rfind("、", 0, mid + 10)
-            if cut == -1:
-                cut = mid
-            text = text[: cut + 1]
-        elif scene_key == "reason" and text == script.get("body", ""):
-            mid = len(text) // 2
-            cut = text.rfind("。", 0, mid + 10)
-            if cut == -1:
-                cut = text.rfind("、", 0, mid + 10)
-            if cut == -1:
-                cut = mid
-            text = text[cut + 1 :]
 
         text_key = f"{scene_key}:{text}"
         if text_key in seen_texts:
@@ -437,11 +417,8 @@ def _build_scene_text(
             filters.append(_dt(label, "(w-text_w)/2", 340, 80, color))
 
     elif scene_key == "ticker":
-        # 銘柄はrevealで明かす — tickerシーンではスコアのみ表示
-        score = script.get("score")
-        if score is not None:
-            filters.append(_dt(f"Score: {score}", "(w-text_w)/2", 200, 88, "#ffd700"))
-        filters.append(_dt("銘柄名は最後に...", "(w-text_w)/2", 320, 68, "#888888"))
+        # 旧tickerシーンは廃止 — introとreasonに統合
+        pass
 
     elif scene_key == "reason":
         reasons = script.get("reasons_display", [])
@@ -453,16 +430,17 @@ def _build_scene_text(
             filters.append(_dt(f"想定保有: {holding}", "(w-text_w)/2", 420, 68, "#88aaff"))
 
     elif scene_key == "cta":
-        pass  # CTAテキストは音声で読み上げ。免責はプロフィール欄に掲載
+        pass  # CTAテキストは音声で読み上げ
 
     elif scene_key == "reveal":
-        # 黒バックで銘柄名を大きく表示
-        ticker = script.get("ticker_display", "")
+        # 黒バック + 銘柄名ドン
         name = script.get("name", "")
-        if ticker or name:
-            filters.append(_dt(f"{name}", "(w-text_w)/2", 700, 122, "white"))
-            filters.append(_dt(f"{ticker}", "(w-text_w)/2", 860, 88, "#ffd700"))
+        ticker = script.get("ticker_display", "")
         score = script.get("score")
+        if name:
+            filters.append(_dt(name, "(w-text_w)/2", 700, 122, "white"))
+        if ticker:
+            filters.append(_dt(ticker, "(w-text_w)/2", 860, 88, "#ffd700"))
         if score is not None:
             filters.append(_dt(f"Score: {score}", "(w-text_w)/2", 980, 72, "#00eeff"))
 
@@ -488,150 +466,127 @@ def compose_shorts_scenes(
 ) -> Path:
     """シーン切替合成: 背景画像をシーンごとに切替 + テキスト + 律 + BGM
 
-    Args:
-        audio_path: full.wav (全セグメント結合済み)
-        audio_segments: {"hook": hook.wav, "body": body.wav, "cta": cta.wav}
-        scene_backgrounds: {"intro": path, "ticker": path, "reason": path, "cta": path}
-        title_card: {"text": str, "sub_text": str, "duration_sec": float, ...}
-        ...
+    シーン構成 (trade):
+      0. title_card (1.5s, 黒, 無音)
+      1. intro     (hook.wav尺, bg_intro)
+      2. reason    (body.wav尺, bg_reason)
+      3. cta       (cta.wav尺, bg_cta)
+      4. reveal    (1.0s, 黒, 無音, 銘柄ドン)
+
+    シーン構成 (no_trade):
+      0. title_card (1.5s, 黒, 無音)
+      1. no_trade   (full.wav尺, bg_no_trade)
     """
     if not _check_ffmpeg():
         raise RuntimeError("ffmpeg not found")
 
-    duration = _get_audio_duration(audio_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     w, h = SHORTS_WIDTH, SHORTS_HEIGHT
 
-    # タイトルカード時間
-    tc_dur = 0.0
-    if title_card:
-        tc_dur = title_card.get("duration_sec", 1.5)
+    # ── 1. タイミング計算 ──
+    tc_dur = title_card.get("duration_sec", 1.5) if title_card else 0.0
+    reveal_dur = 1.0  # 固定1秒
 
-    # シーンタイミング計算
-    seg_durations = {}
+    seg_durations: dict[str, float] = {}
     for key, path in audio_segments.items():
         if path.exists():
             seg_durations[key] = _get_audio_duration(path)
 
-    hook_dur = seg_durations.get("hook", duration * 0.2)
-    body_dur = seg_durations.get("body", duration * 0.5)
-    cta_dur = seg_durations.get("cta", duration * 0.2)
-    reveal_dur = seg_durations.get("reveal", 0.0)
-
     is_trade = script.get("status", "trade") == "trade"
 
+    # シーンリスト: (scene_key, start, end)
     scenes: list[tuple[str, float, float]] = []
+    t = 0.0
 
-    # タイトルカードシーン (音声なし、黒背景)
     if title_card:
-        scenes.append(("title_card", 0.0, tc_dur))
+        scenes.append(("title_card", t, t + tc_dur))
+        t += tc_dur
 
     if is_trade:
-        t = tc_dur
+        hook_dur = seg_durations.get("hook", 3.0)
+        body_dur = seg_durations.get("body", 8.0)
+        cta_dur = seg_durations.get("cta", 4.0)
+
         scenes.append(("intro", t, t + hook_dur))
         t += hook_dur
         scenes.append(("reason", t, t + body_dur))
         t += body_dur
         scenes.append(("cta", t, t + cta_dur))
         t += cta_dur
-        if reveal_dur > 0:
-            scenes.append(("reveal", t, t + reveal_dur + 1.0))
-            t += reveal_dur + 1.0
-        else:
-            t += 0.5
+        scenes.append(("reveal", t, t + reveal_dur))
+        t += reveal_dur
     else:
-        scenes.append(("no_trade", tc_dur, tc_dur + duration + 0.5))
+        full_dur = _get_audio_duration(audio_path) if audio_path.exists() else 10.0
+        scenes.append(("no_trade", t, t + full_dur + 0.5))
+        t += full_dur + 0.5
 
-    total_duration = scenes[-1][2] if scenes else tc_dur + duration + 0.5
+    total_duration = t
 
-    # ffmpegコマンド組立
+    # ── 2. ffmpeg入力・フィルタ組立 ──
     inputs: list[str] = []
     filter_parts: list[str] = []
     input_idx = 0
 
-    # タイトルカード背景 (黒色lavfi)
-    tc_bg_idx = None
-    if title_card:
-        inputs.extend([
-            "-f", "lavfi", "-i",
-            f"color=c=black:s={w}x{h}:d={tc_dur}:r=30",
-        ])
-        tc_bg_idx = input_idx
-        filter_parts.append(f"[{input_idx}:v]setsar=1[bg_title_card]")
-        input_idx += 1
-
-    # リビールシーン背景 (黒色lavfi)
-    reveal_bg_idx = None
-    reveal_scene = [s for s in scenes if s[0] == "reveal"]
-    if reveal_scene:
-        reveal_dur_sec = reveal_scene[0][2] - reveal_scene[0][1]
-        inputs.extend([
-            "-f", "lavfi", "-i",
-            f"color=c=black:s={w}x{h}:d={reveal_dur_sec:.2f}:r=30",
-        ])
-        reveal_bg_idx = input_idx
-        filter_parts.append(f"[{input_idx}:v]setsar=1[bg_reveal]")
-        input_idx += 1
-
-    # 背景画像を入力として追加
-    bg_indices: dict[str, int] = {}
-    for scene_key, _, _ in scenes:
-        if scene_key in ("title_card", "reveal") or scene_key in bg_indices:
-            continue
-        bg_path = scene_backgrounds.get(scene_key)
-        if bg_path and bg_path.exists():
-            inputs.extend(["-loop", "1", "-i", str(bg_path)])
-            bg_indices[scene_key] = input_idx
-            filter_parts.append(
-                f"[{input_idx}:v]scale={w}:{h}:force_original_aspect_ratio=increase,"
-                f"crop={w}:{h},setsar=1[bg_{scene_key}]"
-            )
-            input_idx += 1
-
-    # シーン切替: 各背景にtrim+setpts → concat
-    concat_inputs = []
+    # 各シーンの背景素材を入力に追加
+    bg_labels: dict[str, str] = {}
     for scene_key, start, end in scenes:
+        if scene_key in bg_labels:
+            continue
         scene_dur = end - start
-        if scene_key == "title_card" and tc_bg_idx is not None:
-            label = "scene_title_card"
-            filter_parts.append(
-                f"[bg_title_card]trim=duration={scene_dur:.2f},setpts=PTS-STARTPTS[{label}]"
-            )
-            concat_inputs.append(f"[{label}]")
-        elif scene_key == "reveal" and reveal_bg_idx is not None:
-            label = "scene_reveal"
-            filter_parts.append(
-                f"[bg_reveal]trim=duration={scene_dur:.2f},setpts=PTS-STARTPTS[{label}]"
-            )
-            concat_inputs.append(f"[{label}]")
-        elif scene_key in bg_indices:
-            label = f"scene_{scene_key}"
-            filter_parts.append(
-                f"[bg_{scene_key}]trim=duration={scene_dur:.2f},setpts=PTS-STARTPTS[{label}]"
-            )
-            concat_inputs.append(f"[{label}]")
 
-    if concat_inputs:
-        n = len(concat_inputs)
-        concat_str = "".join(concat_inputs)
-        filter_parts.append(f"{concat_str}concat=n={n}:v=1:a=0[bg_concat]")
-        current_layer = "bg_concat"
-    else:
-        # フォールバック: 単色
-        inputs.extend([
-            "-f", "lavfi", "-i",
-            f"color=c={BG_COLOR}:s={w}x{h}:d={duration}:r=30",
-        ])
-        filter_parts.append(f"[{input_idx}:v]setsar=1[bg_concat]")
-        current_layer = "bg_concat"
-        input_idx += 1
+        if scene_key in ("title_card", "reveal"):
+            # 黒背景 (lavfi)
+            inputs.extend([
+                "-f", "lavfi", "-i",
+                f"color=c=black:s={w}x{h}:d={scene_dur + 0.5}:r=30",
+            ])
+            label = f"bg_{scene_key}"
+            filter_parts.append(f"[{input_idx}:v]setsar=1[{label}]")
+            bg_labels[scene_key] = label
+            input_idx += 1
+        else:
+            # 背景画像
+            bg_path = scene_backgrounds.get(scene_key)
+            if bg_path and bg_path.exists():
+                inputs.extend(["-loop", "1", "-i", str(bg_path)])
+                label = f"bg_{scene_key}"
+                filter_parts.append(
+                    f"[{input_idx}:v]scale={w}:{h}"
+                    f":force_original_aspect_ratio=increase,"
+                    f"crop={w}:{h},setsar=1[{label}]"
+                )
+                bg_labels[scene_key] = label
+                input_idx += 1
 
-    # 音声入力
+    # concat: 各背景をtrim → 結合
+    concat_inputs = []
+    for scene_key, _start, end in scenes:
+        scene_dur = end - _start
+        label = bg_labels.get(scene_key)
+        if not label:
+            continue
+        out_label = f"scene_{scene_key}"
+        filter_parts.append(
+            f"[{label}]trim=duration={scene_dur:.3f},"
+            f"setpts=PTS-STARTPTS[{out_label}]"
+        )
+        concat_inputs.append(f"[{out_label}]")
+
+    if not concat_inputs:
+        raise RuntimeError("No background sources available")
+
+    n = len(concat_inputs)
+    filter_parts.append(
+        f"{''.join(concat_inputs)}concat=n={n}:v=1:a=0[bg_concat]"
+    )
+    current_layer = "bg_concat"
+
+    # ── 3. 音声入力 ──
     inputs.extend(["-i", str(audio_path)])
     voice_idx = input_idx
     input_idx += 1
 
-    # タイトルカードがある場合、音声を遅延
+    # タイトルカード分の音声遅延
     if tc_dur > 0:
         delay_ms = int(tc_dur * 1000)
         filter_parts.append(
@@ -641,16 +596,16 @@ def compose_shorts_scenes(
     else:
         voice_label = f"{voice_idx}:a"
 
-    # BGM
+    # ── 4. BGM ──
     bgm_idx = None
     if bgm_path and bgm_path.exists():
         inputs.extend(["-stream_loop", "-1", "-i", str(bgm_path)])
         bgm_idx = input_idx
         input_idx += 1
 
-    # キャラクターオーバーレイ (revealシーンでは非表示)
+    # ── 5. キャラクターオーバーレイ (reveal以外) ──
     reveal_start = None
-    for sk, ss, se in scenes:
+    for sk, ss, _se in scenes:
         if sk == "reveal":
             reveal_start = ss
             break
@@ -660,38 +615,28 @@ def compose_shorts_scenes(
         char_idx = input_idx
         input_idx += 1
         if str(character_clip).endswith(".webm"):
-            filter_parts.append(f"[{char_idx}:v]scale=-1:{int(h * 0.75)}[char]")
+            filter_parts.append(
+                f"[{char_idx}:v]scale=-1:{int(h * 0.75)}[char]"
+            )
         else:
             filter_parts.append(
                 f"[{char_idx}:v]chromakey=0x00FF00:0.12:0.08,"
                 f"scale=-1:{int(h * 0.75)}[char]"
             )
         if reveal_start is not None:
-            # revealシーンではキャラ非表示
-            char_enable = f"lt(t\\,{reveal_start:.2f})"
+            enable = f"lt(t\\,{reveal_start:.2f})"
             filter_parts.append(
                 f"[{current_layer}][char]overlay=(W-w)/2:H-h"
-                f":shortest=1:enable='{char_enable}'[with_char]"
+                f":shortest=1:enable='{enable}'[with_char]"
             )
         else:
             filter_parts.append(
-                f"[{current_layer}][char]overlay=(W-w)/2:H-h:shortest=1[with_char]"
+                f"[{current_layer}][char]overlay=(W-w)/2:H-h"
+                f":shortest=1[with_char]"
             )
         current_layer = "with_char"
 
-    # revealシーン: 黒バックオーバーレイ (確実に黒背景にする)
-    if reveal_start is not None:
-        reveal_end = scenes[-1][2] if scenes[-1][0] == "reveal" else total_duration
-        reveal_enable = f"between(t\\,{reveal_start:.2f}\\,{reveal_end:.2f})"
-        black_overlay = (
-            f"drawbox=x=0:y=0:w=iw:h=ih"
-            f":color=black:t=fill"
-            f":enable='{reveal_enable}'"
-        )
-        filter_parts.append(f"[{current_layer}]{black_overlay}[with_reveal_bg]")
-        current_layer = "with_reveal_bg"
-
-    # シーンごとのテキスト注入 (enable付き)
+    # ── 6. シーンごとのテキスト注入 ──
     all_text_filters: list[str] = []
     for scene_key, start, end in scenes:
         enable = f"between(t\\,{start:.2f}\\,{end:.2f})"
@@ -703,25 +648,25 @@ def compose_shorts_scenes(
         filter_parts.append(f"[{current_layer}]{text_chain}[with_text]")
         current_layer = "with_text"
 
-    # スクロール字幕 (revealシーンでは非表示)
+    # ── 7. スクロール字幕 (reveal以外) ──
     sub_filters = _build_scroll_subtitle(scenes, script, font_path)
     if sub_filters:
         sub_chain = ",".join(sub_filters)
         filter_parts.append(f"[{current_layer}]{sub_chain}[with_scroll]")
         current_layer = "with_scroll"
 
-    # 下腹部リロール (revealシーンでは非表示)
+    # ── 8. 下腹部リロール (reveal以外) ──
     ticker_filters = _build_bottom_ticker(font_path, total_duration, reveal_start)
     if ticker_filters:
         ticker_chain = ",".join(ticker_filters)
         filter_parts.append(f"[{current_layer}]{ticker_chain}[with_ticker]")
         current_layer = "with_ticker"
 
-    # 最終レイヤー確定 (免責テロップは動画外 — プロフィール欄に掲載)
+    # ── 9. 最終レイヤー ──
     filter_parts.append(f"[{current_layer}]null[final]")
     current_layer = "final"
 
-    # 音声ミックス
+    # ── 10. 音声ミックス ──
     if bgm_idx is not None:
         filter_parts.append(
             f"[{bgm_idx}:a]volume=0.12[bgm_low];"
@@ -731,6 +676,7 @@ def compose_shorts_scenes(
     else:
         audio_map = f"[{voice_label}]" if tc_dur > 0 else f"{voice_idx}:a"
 
+    # ── 11. エンコード ──
     filter_complex = ";".join(filter_parts)
     cmd = [
         "ffmpeg", "-y", *inputs,
@@ -747,6 +693,8 @@ def compose_shorts_scenes(
     if result.returncode != 0:
         logger.error("ffmpeg failed:\n%s", result.stderr[-1500:])
         raise RuntimeError(f"ffmpeg failed: {result.stderr[-500:]}")
+
+    duration = _get_audio_duration(output_path)
     logger.info("Video generated (scenes): %s (%.1fs)", output_path, duration)
     return output_path
 

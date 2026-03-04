@@ -84,7 +84,7 @@ def generate_audio_from_script(
     output_dir.mkdir(parents=True, exist_ok=True)
     result: dict[str, Path] = {}
 
-    for key in ["hook", "body", "cta", "reveal"]:
+    for key in ["hook", "body", "cta"]:
         text = script_youtube.get(key, "")
         if not text.strip():
             continue
@@ -93,13 +93,38 @@ def generate_audio_from_script(
         result[key] = wav_path
 
     full_text = " ".join(
-        script_youtube.get(k, "") for k in ["hook", "body", "cta", "reveal"]
+        script_youtube.get(k, "") for k in ["hook", "body", "cta"]
         if script_youtube.get(k)
     )
     if full_text.strip():
+        # full.wav = 個別wavを結合（タイミング一致保証）
+        segment_paths = [result[k] for k in ["hook", "body", "cta"] if k in result]
         full_path = output_dir / "full.wav"
-        client.synthesize(full_text, full_path)
+        if len(segment_paths) >= 2:
+            _concat_wavs(segment_paths, full_path)
+        elif len(segment_paths) == 1:
+            import shutil
+            shutil.copy2(segment_paths[0], full_path)
+        else:
+            client.synthesize(full_text, full_path)
         result["full"] = full_path
 
     logger.info("Audio generation complete: %d files", len(result))
     return result
+
+
+def _concat_wavs(inputs: list[Path], output: Path) -> None:
+    """ffmpegで複数wavを無音なし結合"""
+    import subprocess
+
+    list_file = output.parent / "_concat_list.txt"
+    with open(list_file, "w") as f:
+        for p in inputs:
+            f.write(f"file '{p}'\n")
+
+    cmd = [
+        "ffmpeg", "-y", "-f", "concat", "-safe", "0",
+        "-i", str(list_file), "-c", "copy", str(output),
+    ]
+    subprocess.run(cmd, capture_output=True, check=True)
+    list_file.unlink(missing_ok=True)

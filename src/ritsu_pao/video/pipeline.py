@@ -93,7 +93,6 @@ def run_video_pipeline(
     # シーン背景の探索
     scene_bg_map = {
         "intro": assets / "bg_intro.png",
-        "ticker": assets / "bg_ticker.png",
         "reason": assets / "bg_reason.png",
         "cta": assets / "bg_cta.png",
         "no_trade": assets / "bg_no_trade.png",
