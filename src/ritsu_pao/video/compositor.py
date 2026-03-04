@@ -446,7 +446,7 @@ def _build_scene_text(
         if ticker:
             filters.append(_dt(ticker, "(w-text_w)/2", 860, 88, "#ffd700"))
         if score is not None:
-            filters.append(_dt(f"Score: {score}", "(w-text_w)/2", 980, 72, "#00eeff"))
+            filters.append(_dt(f"Score {score} / 100", "(w-text_w)/2", 980, 72, "#00eeff"))
 
     elif scene_key == "no_trade":
         filters.append(_dt("本日はシグナル見送り", "(w-text_w)/2", 200, 94, "#ff6666"))

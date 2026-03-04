@@ -90,6 +90,9 @@ def generate_audio_from_script(
             continue
         wav_path = output_dir / f"{key}.wav"
         client.synthesize(text, wav_path)
+        # CTA末尾に1秒の「ため」（無音）を追加 → revealへの余韻
+        if key == "cta":
+            _pad_silence(wav_path, 1.0)
         result[key] = wav_path
 
     full_text = " ".join(
@@ -111,6 +114,21 @@ def generate_audio_from_script(
 
     logger.info("Audio generation complete: %d files", len(result))
     return result
+
+
+def _pad_silence(wav_path: Path, seconds: float) -> None:
+    """wavファイル末尾に無音を追加（上書き）"""
+    import subprocess
+
+    padded = wav_path.parent / f"{wav_path.stem}_padded.wav"
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", str(wav_path),
+        "-af", f"apad=pad_dur={seconds}",
+        str(padded),
+    ]
+    subprocess.run(cmd, capture_output=True, check=True)
+    padded.replace(wav_path)
 
 
 def _concat_wavs(inputs: list[Path], output: Path) -> None:
