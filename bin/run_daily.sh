@@ -39,22 +39,41 @@ else
     exit 0
 fi
 
-# ── candidates.json存在チェック ──
-CANDIDATES="$INGA_OUTPUT/candidates.json"
-if [[ ! -f "$CANDIDATES" ]]; then
-    echo "[ritsu-pao] ERROR: candidates.json not found at $CANDIDATES"
+# ── candidates.json探索 (inga-quantsの出力名に対応) ──
+if [[ -f "$INGA_OUTPUT/candidates.json" ]]; then
+    CANDIDATES="$INGA_OUTPUT/candidates.json"
+elif [[ -f "$INGA_OUTPUT/short_candidates.json" ]]; then
+    CANDIDATES="$INGA_OUTPUT/short_candidates.json"
+else
+    echo "[ritsu-pao] ERROR: candidates not found in $INGA_OUTPUT"
     exit 1
 fi
+echo "[ritsu-pao] Using candidates: $CANDIDATES"
 
-# ── gates_result.json（ない場合もpublisherが対応） ──
+# ── gates_result.json探索 (inga-quantsではdecision_card_*.json) ──
 GATES="$INGA_OUTPUT/gates_result.json"
+if [[ ! -f "$GATES" ]]; then
+    # decision_card_YYYY-MM-DD.json を探す
+    DECISION_CARD=$(ls -1 "$INGA_OUTPUT"/decision_card_*.json 2>/dev/null | head -1)
+    if [[ -n "$DECISION_CARD" ]]; then
+        GATES="$DECISION_CARD"
+        echo "[ritsu-pao] Using decision_card as gates: $GATES"
+    else
+        echo "[ritsu-pao] WARN: No gates file found, publisher will use defaults"
+        GATES=""
+    fi
+fi
 
 # ── Publish実行 ──
 echo "[ritsu-pao] Starting publish pipeline..."
 cd "$PROJECT_DIR"
+GATES_ARG=""
+if [[ -n "$GATES" && -f "$GATES" ]]; then
+    GATES_ARG="--gates $GATES"
+fi
 python3 -m ritsu_pao.publish.publisher \
     --candidates "$CANDIDATES" \
-    --gates "$GATES" \
+    $GATES_ARG \
     --output "$PUBLISH_OUTPUT" \
     --config "$PROJECT_DIR/config"
 
