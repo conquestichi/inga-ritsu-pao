@@ -34,11 +34,50 @@ def load_candidates(path: Path) -> CandidatesJson:
 
 
 def load_gates(path: Path) -> GatesResult:
-    """gates_result.jsonを読み込み。ファイルが無い場合はall_passed=Trueで返す"""
+    """gates_result.json or decision_card_*.json を読み込み。
+
+    decision_card形式の場合は自動変換:
+      action: "TRADE"/"NO_TRADE" → all_passed
+      no_trade_reasons → rejection_reasons
+      key_metrics.wf_ic → wf_ic
+    """
     if not path.exists():
-        logger.warning("gates_result.json not found, assuming all_passed=True")
+        logger.warning("gates file not found, assuming all_passed=True")
         return GatesResult(all_passed=True, regime="risk_on")
+
     data = json.loads(path.read_text(encoding="utf-8"))
+
+    # decision_card形式の検出 (action フィールドがある)
+    if "action" in data:
+        logger.info("Detected decision_card format, converting to GatesResult")
+        all_passed = data.get("action") == "TRADE"
+        rejection_reasons = data.get("no_trade_reasons", [])
+        key_metrics = data.get("key_metrics", {})
+        wf_ic = key_metrics.get("wf_ic")
+
+        # regime: decision_cardに無い場合、short_candidatesから推定するか
+        # またはmanifest.jsonから取得。無ければdefault
+        regime = data.get("regime")
+        if not regime:
+            # 同ディレクトリのmanifest.jsonからregime取得を試行
+            manifest_path = path.parent / "manifest.json"
+            if manifest_path.exists():
+                try:
+                    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                    regime = manifest.get("regime", "risk_on")
+                except Exception:
+                    regime = "risk_on"
+            else:
+                regime = "risk_on"
+
+        return GatesResult(
+            all_passed=all_passed,
+            rejection_reasons=rejection_reasons,
+            regime=regime,
+            wf_ic=wf_ic,
+        )
+
+    # 標準形式 (gates_result.json)
     return GatesResult.model_validate(data)
 
 
